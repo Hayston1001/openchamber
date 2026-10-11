@@ -59,6 +59,12 @@ interface ProjectActivityInput {
     summarySourceMessageId?: string;
     summarySourcePartId?: string;
     showTextJustificationActivity: boolean;
+    /**
+     * When true, the model's intermediate text (Justification) is a segment
+     * boundary: it splits Activity around itself and renders as visible text
+     * outside every group. Off keeps it inside the current group.
+     */
+    justificationOutsideActivity: boolean;
 }
 
 interface ProjectActivityResult {
@@ -86,10 +92,22 @@ export const projectTurnActivity = (input: ProjectActivityInput): ProjectActivit
         });
     });
 
-    const taskMessageById = new Map<string, string>();
-    const taskOrder: string[] = [];
-    const partsByAfterTool = new Map<string | null, TurnActivityRecord[]>();
-    let currentAfterToolPartId: string | null = null;
+    // A segment anchor is any row that splits Activity without being part of a
+    // segment itself: a standalone tool (subagent) or, when the setting asks
+    // for it, the intermediate text (Justification). Anchors are recorded in
+    // encounter order so segments come out chronologically.
+    const anchorMessageById = new Map<string, string>();
+    const anchorOrder: string[] = [];
+    const partsByAfterAnchor = new Map<string | null, TurnActivityRecord[]>();
+    let currentAnchorPartId: string | null = null;
+
+    const registerAnchor = (partId: string, messageId: string) => {
+        if (!anchorMessageById.has(partId)) {
+            anchorMessageById.set(partId, messageId);
+            anchorOrder.push(partId);
+        }
+        currentAnchorPartId = partId;
+    };
 
     input.assistantMessages.forEach((message) => {
         const finish = getMessageFinish(message);
@@ -116,12 +134,7 @@ export const projectTurnActivity = (input: ProjectActivityInput): ProjectActivit
             const toolName = isTool ? (part as { tool?: string }).tool : undefined;
             const standaloneTool = isTool && isStandaloneTool(toolName);
             if (standaloneTool) {
-                const toolPartId = partId;
-                if (!taskMessageById.has(toolPartId)) {
-                    taskMessageById.set(toolPartId, message.info.id);
-                    taskOrder.push(toolPartId);
-                }
-                currentAfterToolPartId = toolPartId;
+                registerAnchor(partId, message.info.id);
             }
 
             const isConfirmedSummaryText = part.type === 'text'
@@ -152,19 +165,26 @@ export const projectTurnActivity = (input: ProjectActivityInput): ProjectActivit
                 return;
             }
 
+            if (kind === 'justification' && input.justificationOutsideActivity) {
+                registerAnchor(partId, message.info.id);
+            }
+
             const activity: TurnActivityRecord = {
                 ...buildTurnPartRecord(input.turnId, message.info.id, part, partIndex),
                 kind,
             };
             activityParts.push(activity);
 
-            if (kind === 'tool' && standaloneTool) {
+            // Anchor rows split Activity but are rendered outside every group.
+            const isAnchorRow = (kind === 'tool' && standaloneTool)
+                || (kind === 'justification' && input.justificationOutsideActivity);
+            if (isAnchorRow) {
                 return;
             }
 
-            const list = partsByAfterTool.get(currentAfterToolPartId) ?? [];
+            const list = partsByAfterAnchor.get(currentAnchorPartId) ?? [];
             list.push(activity);
-            partsByAfterTool.set(currentAfterToolPartId, list);
+            partsByAfterAnchor.set(currentAnchorPartId, list);
         });
     });
 
@@ -191,25 +211,25 @@ export const projectTurnActivity = (input: ProjectActivityInput): ProjectActivit
         return firstWithAny;
     };
 
-    const orderedKeys: Array<string | null> = [null, ...taskOrder];
-    orderedKeys.forEach((afterToolPartId) => {
-        const segmentParts = partsByAfterTool.get(afterToolPartId) ?? [];
+    const orderedKeys: Array<string | null> = [null, ...anchorOrder];
+    orderedKeys.forEach((afterAnchorPartId) => {
+        const segmentParts = partsByAfterAnchor.get(afterAnchorPartId) ?? [];
         if (segmentParts.length === 0) {
             return;
         }
 
-        const anchorMessageId = afterToolPartId === null
+        const anchorMessageId = afterAnchorPartId === null
             ? pickStartAnchor(segmentParts)
-            : taskMessageById.get(afterToolPartId);
+            : anchorMessageById.get(afterAnchorPartId);
 
         if (!anchorMessageId) {
             return;
         }
 
         activitySegments.push({
-            id: `${input.turnId}:${anchorMessageId}:${afterToolPartId ?? 'start'}`,
+            id: `${input.turnId}:${anchorMessageId}:${afterAnchorPartId ?? 'start'}`,
             anchorMessageId,
-            afterToolPartId,
+            afterToolPartId: afterAnchorPartId,
             parts: segmentParts,
         });
     });

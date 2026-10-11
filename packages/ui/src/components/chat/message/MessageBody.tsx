@@ -51,7 +51,7 @@ import { StaticToolRow } from './parts/ProgressiveGroup';
 import { isExpandableTool, isStandaloneTool } from './parts/toolRenderUtils';
 import TurnActivity from '../components/TurnActivity';
 import { LiveActivityCollapse } from '../components/LiveActivityCollapse';
-import { LiveFinalActivityContext } from '../components/liveActivityContext';
+import { LiveActivitySplitContext } from '../components/liveActivityContext';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
@@ -1346,12 +1346,14 @@ const AssistantMessageBody = React.memo(({
     const [isForkDialogOpen, setIsForkDialogOpen] = React.useState(false);
     const [isForkSubmitting, setIsForkSubmitting] = React.useState(false);
     const chatRenderMode = useUIStore((state) => state.chatRenderMode);
+    const justificationOutsideActivity = useUIStore((state) => state.justificationOutsideActivity);
     const collapsibleThinkingBlocks = useUIStore((state) => state.collapsibleThinkingBlocks);
     const showSplitAssistantMessageActions = useUIStore((state) => state.showSplitAssistantMessageActions);
     const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
     const vscodeApi = useRuntimeAPIs().vscode;
     const isSortedRenderMode = chatRenderMode === 'sorted';
-    const liveFinalActivity = React.useContext(LiveFinalActivityContext);
+    const liveActivitySplit = React.useContext(LiveActivitySplitContext);
+    const liveActivityContentId = React.useId();
     const collapsedPreviewCount = 7;
     const isLastAssistantInTurn = turnGroupingContext?.isLastAssistantInTurn ?? false;
     const hasStopFinish = messageFinish === 'stop';
@@ -1804,8 +1806,36 @@ const AssistantMessageBody = React.memo(({
         const answerRendered: React.ReactNode[] = [];
         const activityRendered: React.ReactNode[] = [];
         let rendered = answerRendered;
-        const splitLiveActivity = !isSortedRenderMode && liveFinalActivity?.messageId === messageId && hasStopFinish;
+        const splitLiveActivity = !isSortedRenderMode
+            && liveActivitySplit !== null
+            && liveActivitySplit.messageIds.has(messageId);
+        // Only the opt-in path keeps part order by splitting inside a message.
+        // With the setting off, the final message keeps its single leading
+        // collapse exactly as before.
+        const orderPreservingSplit = splitLiveActivity && justificationOutsideActivity;
         let hasRenderedAnswerText = false;
+        // Live turns keep part order: a run of non-text parts collapses, and the
+        // text at its position stays visible, so an intermediate note sits
+        // between the tool groups it actually sat between instead of collecting
+        // after all of them.
+        let splitActivityChunkIndex = 0;
+        const flushSplitActivity = () => {
+            if (!orderPreservingSplit || !liveActivitySplit || activityRendered.length === 0) {
+                return;
+            }
+            const nodes = activityRendered.splice(0, activityRendered.length);
+            answerRendered.push(
+                <LiveActivityCollapse
+                    key={`message-activity-${messageId}-${splitActivityChunkIndex}`}
+                    expanded={liveActivitySplit.expanded}
+                    id={`${liveActivityContentId}-${splitActivityChunkIndex}`}
+                    animateOnMount={liveActivitySplit.animateCollapse}
+                >
+                    {nodes}
+                </LiveActivityCollapse>
+            );
+            splitActivityChunkIndex += 1;
+        };
         const isFinalLiveAnswer = chatRenderMode === 'live' && isLastAssistantInTurn && hasStopFinish;
         const hasEarlierVisibleActivity = isFinalLiveAnswer && Boolean(turnGroupingContext?.activityParts?.some((activity) => {
             if (activity.messageId === messageId) {
@@ -1849,13 +1879,19 @@ const AssistantMessageBody = React.memo(({
             );
         };
 
-        // Segments that follow a standalone tool of THIS message render right
-        // after that tool's row so e.g. an Agent Task sits chronologically
-        // between the activity before it and the activity after it.
+        // Segments that follow a standalone tool or a justification of THIS
+        // message render right after that row, so e.g. an Agent Task or an
+        // always-visible Justification sits chronologically between the
+        // activity before it and the activity after it.
         const localToolPartIds = new Set<string>();
         visibleParts.forEach((part, partIndex) => {
+            const partId = part.id ?? `${messageId}-part-${partIndex}-${part.type}`;
             if (part.type === 'tool') {
-                localToolPartIds.add(part.id ?? `${messageId}-part-${partIndex}-${part.type}`);
+                localToolPartIds.add(partId);
+                return;
+            }
+            if (part.type === 'text' && activityByPart.get(part)?.kind === 'justification') {
+                localToolPartIds.add(partId);
             }
         });
         const segmentsAfterLocalTool = new Map<string, TurnActivityGroup[]>();
@@ -1899,6 +1935,26 @@ const AssistantMessageBody = React.memo(({
 
             if (part.type === 'text') {
                 const activity = activityByPart.get(part);
+                const textPartId = part.id ?? `${messageId}-part-${i}-${part.type}`;
+                // The model's intermediate text stays visible when the setting
+                // asks for it: render it as plain text at its position and flush
+                // the Activity group that follows it.
+                if (justificationOutsideActivity && activity?.kind === 'justification') {
+                    rendered.push(
+                        <AssistantTextPart
+                            key={`justification-${messageId}-${i}`}
+                            part={part}
+                            sessionId={sessionId}
+                            messageId={messageId}
+                            streamPhase={effectiveStreamPhase}
+                            chatRenderMode={chatRenderMode}
+                            onShowPopup={onShowPopup}
+                        />
+                    );
+                    flushSegmentsAfterTool(textPartId);
+                    i += 1;
+                    continue;
+                }
                 if (shouldDeferSortedInlineText) {
                     i += 1;
                     continue;
@@ -1907,7 +1963,11 @@ const AssistantMessageBody = React.memo(({
                     i += 1;
                     continue;
                 }
-                if (isFinalLiveAnswer && !hasRenderedAnswerText && (rendered.length > 0 || activityRendered.length > 0 || hasEarlierVisibleActivity || turnGroupingContext?.earlierAssistantText)) {
+                const pendingActivityCount = activityRendered.length;
+                if (orderPreservingSplit) {
+                    flushSplitActivity();
+                }
+                if (isFinalLiveAnswer && !hasRenderedAnswerText && (rendered.length > 0 || pendingActivityCount > 0 || hasEarlierVisibleActivity || turnGroupingContext?.earlierAssistantText)) {
                     rendered.push(
                         <div
                             key={`final-answer-divider-${messageId}`}
@@ -2065,10 +2125,14 @@ const AssistantMessageBody = React.memo(({
             });
         });
 
-        if (splitLiveActivity && liveFinalActivity) {
+        if (orderPreservingSplit) {
+            flushSplitActivity();
+            return answerRendered;
+        }
+        if (splitLiveActivity && liveActivitySplit) {
             return [
-                <LiveActivityCollapse key="final-message-activity" expanded={liveFinalActivity.expanded}
-                    id={liveFinalActivity.contentId} animateOnMount={liveFinalActivity.animateCollapse}>
+                <LiveActivityCollapse key={`message-activity-${messageId}`} expanded={liveActivitySplit.expanded}
+                    id={liveActivityContentId} animateOnMount={liveActivitySplit.animateCollapse}>
                     {activityRendered}
                 </LiveActivityCollapse>,
                 ...answerRendered,
@@ -2088,7 +2152,9 @@ const AssistantMessageBody = React.memo(({
         isMobile,
         isActivityOwnerMessage,
         isSortedRenderMode,
-        liveFinalActivity,
+        liveActivitySplit,
+        liveActivityContentId,
+        justificationOutsideActivity,
         isLastAssistantInTurn,
         hasStopFinish,
         lastRenderableTextPartIndex,

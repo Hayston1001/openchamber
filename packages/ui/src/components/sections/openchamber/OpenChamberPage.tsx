@@ -206,6 +206,7 @@ const ChatSectionContent: React.FC = () => {
                 'sessionAssist',
                 'chatRenderMode',
                 'activityRenderMode',
+                'justificationOutsideActivity',
                 'userMessageRendering',
                 'mermaidRendering',
                 'reasoning',

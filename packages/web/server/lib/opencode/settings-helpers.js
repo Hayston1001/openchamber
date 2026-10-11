@@ -779,6 +779,9 @@ export const createSettingsHelpers = (dependencies) => {
         result.activityRenderMode = mode;
       }
     }
+    if (typeof candidate.justificationOutsideActivity === 'boolean') {
+      result.justificationOutsideActivity = candidate.justificationOutsideActivity;
+    }
     if (typeof candidate.mermaidRenderingMode === 'string') {
       const mode = candidate.mermaidRenderingMode.trim();
       if (mode === 'svg' || mode === 'ascii') {

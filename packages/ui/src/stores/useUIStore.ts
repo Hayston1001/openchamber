@@ -1003,6 +1003,8 @@ interface UIStore {
   expandReasoningWhileStreaming: boolean;
   chatRenderMode: ChatRenderMode;
   activityRenderMode: ActivityRenderMode;
+  /** The model's intermediate text (Justification) renders as always-visible text outside Activity, splitting it into groups. */
+  justificationOutsideActivity: boolean;
   showDeletionDialog: boolean;
   autoDeleteEnabled: boolean;
   /** Global file-editor autosave. Default true for backward compatibility. */
@@ -1274,6 +1276,7 @@ interface UIStore {
   setExpandReasoningWhileStreaming: (value: boolean) => void;
   setChatRenderMode: (value: ChatRenderMode) => void;
   setActivityRenderMode: (value: ActivityRenderMode) => void;
+  setJustificationOutsideActivity: (value: boolean) => void;
   setShowDeletionDialog: (value: boolean) => void;
   setAutoDeleteEnabled: (value: boolean) => void;
   setMergedWorktreeCleanupEnabled: (value: boolean) => void;
@@ -1491,6 +1494,7 @@ export const useUIStore = create<UIStore>()(
         expandReasoningWhileStreaming: false,
         chatRenderMode: 'live',
         activityRenderMode: 'summary',
+        justificationOutsideActivity: false,
         showDeletionDialog: true,
         autoDeleteEnabled: false,
         autoSaveEnabled: true,
@@ -2540,6 +2544,10 @@ export const useUIStore = create<UIStore>()(
           set({ activityRenderMode: value });
         },
 
+        setJustificationOutsideActivity: (value) => {
+          set({ justificationOutsideActivity: value });
+        },
+
         setShowDeletionDialog: (value) => {
           set({ showDeletionDialog: value });
         },
@@ -3556,6 +3564,7 @@ export const useUIStore = create<UIStore>()(
           expandReasoningWhileStreaming: state.expandReasoningWhileStreaming,
           chatRenderMode: state.chatRenderMode,
           activityRenderMode: state.activityRenderMode,
+          justificationOutsideActivity: state.justificationOutsideActivity,
           showDeletionDialog: state.showDeletionDialog,
           autoDeleteEnabled: state.autoDeleteEnabled,
           autoSaveEnabled: state.autoSaveEnabled,

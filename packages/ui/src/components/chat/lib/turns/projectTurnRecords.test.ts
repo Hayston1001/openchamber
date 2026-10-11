@@ -269,4 +269,55 @@ describe('projectTurnRecords', () => {
         const questionActivity = turn?.activityParts.find((activity) => activity.partIndex === 1);
         expect(questionActivity?.kind).toBe('tool');
     });
+
+    test('splits Activity around intermediate text when justification stays outside it', () => {
+        const user = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
+        const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
+        assistant.parts = [
+            { id: 't1', type: 'tool', callID: 'c1', tool: 'read', state: { status: 'completed' } } as Part,
+            { id: 'j1', type: 'text', text: 'Let me check the file.' } as Part,
+            { id: 't2', type: 'tool', callID: 'c2', tool: 'bash', state: { status: 'completed' } } as Part,
+            { id: 'j2', type: 'text', text: 'Now I will run a command.' } as Part,
+        ];
+
+        const projection = projectTurnRecords([user, assistant], {
+            showTextJustificationActivity: true,
+            justificationOutsideActivity: true,
+        });
+
+        const turn = projection.turns[0];
+        expect(turn).toBeDefined();
+        // One group before the first justification, one between the two, and an
+        // empty group after the last (dropped), instead of a single group.
+        expect(turn?.activitySegments).toHaveLength(2);
+        expect(turn?.activitySegments[0]?.afterToolPartId).toBeNull();
+        expect(turn?.activitySegments[1]?.afterToolPartId).toBe('j1');
+        expect(turn?.activitySegments.map((segment) => segment.parts.map((activity) => activity.id))).toEqual([
+            ['t1'],
+            ['t2'],
+        ]);
+        // The justification rows never join a group: they render between them.
+        expect(turn?.activitySegments.some((segment) => (
+            segment.parts.some((activity) => activity.kind === 'justification')
+        ))).toBe(false);
+    });
+
+    test('keeps justification inside a single Activity group when the setting is off', () => {
+        const user = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
+        const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2 });
+        assistant.parts = [
+            { id: 't1', type: 'tool', callID: 'c1', tool: 'read', state: { status: 'completed' } } as Part,
+            { id: 'j1', type: 'text', text: 'Let me check the file.' } as Part,
+            { id: 't2', type: 'tool', callID: 'c2', tool: 'bash', state: { status: 'completed' } } as Part,
+        ];
+
+        const projection = projectTurnRecords([user, assistant], {
+            showTextJustificationActivity: true,
+            justificationOutsideActivity: false,
+        });
+
+        const turn = projection.turns[0];
+        expect(turn?.activitySegments).toHaveLength(1);
+        expect(turn?.activitySegments[0]?.parts.map((activity) => activity.id)).toEqual(['t1', 'j1', 't2']);
+    });
 });

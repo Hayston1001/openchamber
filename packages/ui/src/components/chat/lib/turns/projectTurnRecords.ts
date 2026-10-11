@@ -66,6 +66,7 @@ const buildTurnStreamState = (userMessage: ChatMessageEntry, assistantMessages: 
 interface ProjectTurnRecordsOptions {
     previousProjection?: TurnProjectionResult | null;
     showTextJustificationActivity: boolean;
+    justificationOutsideActivity: boolean;
     showTurnChangedFiles: boolean;
     /**
      * When true, a turn whose user message is hidden (no visible display parts,
@@ -78,6 +79,7 @@ interface ProjectTurnRecordsOptions {
 const DEFAULT_OPTIONS: ProjectTurnRecordsOptions = {
     previousProjection: null,
     showTextJustificationActivity: false,
+    justificationOutsideActivity: false,
     showTurnChangedFiles: false,
     mergeHiddenUserTurns: false,
 };
@@ -119,7 +121,7 @@ const hydrateTurnRecord = (
     effectiveOptions: ProjectTurnRecordsOptions,
 ): TurnRecord => {
     const { assistantMessages, turnId } = turn;
-    const { showTextJustificationActivity, showTurnChangedFiles } = effectiveOptions;
+    const { showTextJustificationActivity, justificationOutsideActivity, showTurnChangedFiles } = effectiveOptions;
 
     let summary: TurnRecord['summary'] | undefined;
     const readSummary = () => {
@@ -152,6 +154,7 @@ const hydrateTurnRecord = (
             summarySourceMessageId: sourceMessageId,
             summarySourcePartId: sourcePartId,
             showTextJustificationActivity,
+            justificationOutsideActivity,
         });
         return activity;
     };

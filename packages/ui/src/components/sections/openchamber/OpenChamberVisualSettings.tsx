@@ -315,7 +315,7 @@ const normalizeUserMessageRenderingMode = (mode: unknown): 'markdown' | 'plain' 
     return mode === 'markdown' ? 'markdown' : 'plain';
 };
 
-type VisibleSetting = 'sessionAssist' | 'sessionGoal' | 'theme' | 'windowControlsPosition' | 'pwaInstallName' | 'pwaOrientation' | 'mobileKeyboardMode' | 'timeFormat' | 'weekStart' | 'fontSize' | 'terminalFontSize' | 'terminalShell' | 'terminalLoginShell' | 'editorFontSize' | 'spacing' | 'scrollbars' | 'inputBarOffset' | 'mermaidRendering' | 'userMessageRendering' | 'chatRenderMode' | 'messageTransport' | 'activityRenderMode' | 'collapsibleUserMessages' | 'stickyUserHeader' | 'promptNavigatorEnabled' | 'wideChatLayout' | 'codeBlockLineWrap' | 'tableCellWrap' | 'copyMessagesAsPlainText' | 'splitAssistantMessageActions' | 'subagentReadOnlyBanner' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'fileViewerPreview' | 'reasoning' | 'showToolFileIcons' | 'showTurnChangedFiles' | 'followUpBehavior' | 'inputHistoryScope' | 'inputHistoryLimit' | 'messageSearch' | 'terminalQuickKeys' | 'fileEditorKeymap' | 'persistDraft' | 'inputSpellcheck' | 'largeTextPaste' | 'enterToSend' | 'reportUsage' | 'autoSaveEnabled' | 'confirmFileTreeMove' | 'sessionTabs' | 'animatedActivityIndicators' | 'layoutAnimations' | 'fileTreeSide';
+type VisibleSetting = 'sessionAssist' | 'sessionGoal' | 'theme' | 'windowControlsPosition' | 'pwaInstallName' | 'pwaOrientation' | 'mobileKeyboardMode' | 'timeFormat' | 'weekStart' | 'fontSize' | 'terminalFontSize' | 'terminalShell' | 'terminalLoginShell' | 'editorFontSize' | 'spacing' | 'scrollbars' | 'inputBarOffset' | 'mermaidRendering' | 'userMessageRendering' | 'chatRenderMode' | 'messageTransport' | 'activityRenderMode' | 'justificationOutsideActivity' | 'collapsibleUserMessages' | 'stickyUserHeader' | 'promptNavigatorEnabled' | 'wideChatLayout' | 'codeBlockLineWrap' | 'tableCellWrap' | 'copyMessagesAsPlainText' | 'splitAssistantMessageActions' | 'subagentReadOnlyBanner' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'fileViewerPreview' | 'reasoning' | 'showToolFileIcons' | 'showTurnChangedFiles' | 'followUpBehavior' | 'inputHistoryScope' | 'inputHistoryLimit' | 'messageSearch' | 'terminalQuickKeys' | 'fileEditorKeymap' | 'persistDraft' | 'inputSpellcheck' | 'largeTextPaste' | 'enterToSend' | 'reportUsage' | 'autoSaveEnabled' | 'confirmFileTreeMove' | 'sessionTabs' | 'animatedActivityIndicators' | 'layoutAnimations' | 'fileTreeSide';
 
 const WINDOW_CONTROLS_POSITION_OPTIONS: Array<{ id: DesktopWindowControlsPosition; labelKey: string }> = [
     { id: 'left', labelKey: 'settings.openchamber.desktopNetwork.option.windowControlsLeft' },
@@ -460,6 +460,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setWeekStartPreference = useUIStore(state => state.setWeekStartPreference);
     const showSplitAssistantMessageActions = useUIStore(state => state.showSplitAssistantMessageActions);
     const setShowSplitAssistantMessageActions = useUIStore(state => state.setShowSplitAssistantMessageActions);
+    const justificationOutsideActivity = useUIStore(state => state.justificationOutsideActivity);
+    const setJustificationOutsideActivity = useUIStore(state => state.setJustificationOutsideActivity);
     const allowPromptingSubagentSessions = useUIStore(state => state.allowPromptingSubagentSessions);
     const setAllowPromptingSubagentSessions = useUIStore(state => state.setAllowPromptingSubagentSessions);
     const draftStartersVisible = useUIStore(state => state.draftStartersVisible);
@@ -651,6 +653,11 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
         void updateDesktopSettings({ activityRenderMode: mode });
     }, [setActivityRenderMode]);
 
+    const handleJustificationOutsideActivityChange = React.useCallback((enabled: boolean) => {
+        setJustificationOutsideActivity(enabled);
+        void updateDesktopSettings({ justificationOutsideActivity: enabled });
+    }, [setJustificationOutsideActivity]);
+
     const handleMermaidRenderingModeChange = React.useCallback((mode: 'svg' | 'ascii') => {
         setMermaidRenderingMode(mode);
         void updateDesktopSettings({ mermaidRenderingMode: mode });
@@ -742,6 +749,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
         || shouldShow('chatRenderMode')
         || shouldShow('messageTransport')
         || shouldShow('activityRenderMode')
+        || shouldShow('justificationOutsideActivity')
         || shouldShow('collapsibleUserMessages')
         || shouldShow('stickyUserHeader')
         || shouldShow('promptNavigatorEnabled')
@@ -764,7 +772,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
         || (!isMobile && shouldShow('inputSpellcheck'))
         || shouldShow('enterToSend');
     const showBehaviorDisplaySettings = shouldShow('chatRenderMode')
-        || shouldShow('activityRenderMode');
+        || shouldShow('activityRenderMode')
+        || shouldShow('justificationOutsideActivity');
     const showTransportSection = shouldShow('messageTransport');
     const showBehaviorMessageOptions = shouldShow('userMessageRendering')
         || shouldShow('mermaidRendering')
@@ -1836,6 +1845,17 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             ))}
                                         </SettingsRadioGroup>
                                     </SettingsControlGroup>
+                                )}
+
+                                {shouldShow('justificationOutsideActivity') && (
+                                    <SettingsCheckboxRow
+                                        checked={justificationOutsideActivity}
+                                        onChange={handleJustificationOutsideActivityChange}
+                                        label={t('settings.openchamber.visual.field.justificationOutsideActivity')}
+                                        ariaLabel={t('settings.openchamber.visual.field.justificationOutsideActivityAria')}
+                                        settingsItem="chat.justification-outside-activity"
+                                        info={t('settings.openchamber.visual.field.justificationOutsideActivityTooltip')}
+                                    />
                                 )}
                             </SettingsSection>
                         )}

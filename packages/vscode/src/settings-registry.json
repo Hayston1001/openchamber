@@ -324,6 +324,9 @@
     "activityRenderMode": {
       "scope": "profile"
     },
+    "justificationOutsideActivity": {
+      "scope": "profile"
+    },
     "mermaidRenderingMode": {
       "scope": "profile"
     },

@@ -727,6 +727,7 @@ type TimelineRowContextValue = {
     onToggleTurnGroup: ToggleTurnGroup;
     chatRenderMode: 'sorted' | 'live';
     showTurnChangedFiles: boolean;
+    justificationOutsideActivity: boolean;
     shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
     onUserAnimationConsumed: (messageId: string) => void;
     reviewTransferDirection?: ReviewTransferDirection | null;
@@ -759,6 +760,7 @@ const TimelineRow = React.memo(({ entry }: { entry: RenderEntry }) => {
             onToggleTurnGroup={context.onToggleTurnGroup}
             chatRenderMode={context.chatRenderMode}
             showTurnChangedFiles={context.showTurnChangedFiles}
+            justificationOutsideActivity={context.justificationOutsideActivity}
             shouldAnimateUserMessage={context.shouldAnimateUserMessage}
             onUserAnimationConsumed={context.onUserAnimationConsumed}
             activeStreamingMessageId={live ? context.activeStreamingMessageId : null}
@@ -895,6 +897,7 @@ const TimelineRowContent: React.FC<{
     onToggleTurnGroup: ToggleTurnGroup;
     chatRenderMode: 'sorted' | 'live';
     showTurnChangedFiles: boolean;
+    justificationOutsideActivity: boolean;
     shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
     onUserAnimationConsumed: (messageId: string) => void;
     activeStreamingMessageId?: string | null;
@@ -912,6 +915,7 @@ const TimelineRowContent: React.FC<{
     onToggleTurnGroup,
     chatRenderMode,
     showTurnChangedFiles,
+    justificationOutsideActivity,
     shouldAnimateUserMessage,
     onUserAnimationConsumed,
     activeStreamingMessageId,
@@ -931,10 +935,11 @@ const TimelineRowContent: React.FC<{
     const livePartsByMessageId = useSessionPartsForMessages(tailMessageIds, directory);
     const rowEntry = React.useMemo(() => (live ? buildLiveStreamingEntry(entry, {
         livePartsByMessageId,
-        showTextJustificationActivity: chatRenderMode === 'sorted',
+        showTextJustificationActivity: chatRenderMode === 'sorted' || justificationOutsideActivity,
+        justificationOutsideActivity,
         showTurnChangedFiles,
         mergeHiddenUserTurns: true,
-    }) : entry), [chatRenderMode, entry, live, livePartsByMessageId, showTurnChangedFiles]);
+    }) : entry), [chatRenderMode, entry, justificationOutsideActivity, live, livePartsByMessageId, showTurnChangedFiles]);
 
     return (
         <MessageListEntry
@@ -982,6 +987,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     const chatRenderMode = useUIStore((state) => state.chatRenderMode);
     const activityRenderMode = useUIStore((state) => state.activityRenderMode);
     const showTurnChangedFiles = useUIStore((state) => state.showTurnChangedFiles);
+    const justificationOutsideActivity = useUIStore((state) => state.justificationOutsideActivity);
     const defaultActivityExpanded = activityRenderMode === 'summary';
     const reviewTransferDirection = useGlobalSessionsStore((state) => {
         return state.reviewTransferBySessionId.get(sessionKey) ?? null;
@@ -1077,7 +1083,8 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 
     const { projection, staticTurns, streamingTurn } = useTurnRecords(displayMessages, {
         sessionKey,
-        showTextJustificationActivity: chatRenderMode === 'sorted',
+        showTextJustificationActivity: chatRenderMode === 'sorted' || justificationOutsideActivity,
+        justificationOutsideActivity,
         showTurnChangedFiles,
     });
     const hasUngroupedStaticEntries = projection.ungroupedMessageIds.size > 0;
@@ -1565,6 +1572,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         onToggleTurnGroup: toggleTurnGroup,
         chatRenderMode,
         showTurnChangedFiles,
+        justificationOutsideActivity,
         shouldAnimateUserMessage,
         onUserAnimationConsumed,
         reviewTransferDirection,
@@ -1579,6 +1587,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         chatRenderMode,
         defaultActivityExpanded,
         directory,
+        justificationOutsideActivity,
         onUserAnimationConsumed,
         reviewTransferDirection,
         sessionIsWorking,

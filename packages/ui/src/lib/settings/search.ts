@@ -38,6 +38,13 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['activity', 'collapsed', 'expanded', 'live', 'tools', 'history'],
   },
   {
+    id: 'chat.justification-outside-activity',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.field.justificationOutsideActivity',
+    descriptionKey: 'settings.openchamber.visual.field.justificationOutsideActivityTooltip',
+    keywords: ['justification', 'activity', 'intermediate', 'text', 'expanded', 'collapsed', 'progress'],
+  },
+  {
     id: 'appearance.language',
     page: 'appearance',
     titleKey: 'settings.appearance.language.label',

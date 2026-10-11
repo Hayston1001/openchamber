@@ -6,9 +6,10 @@ import type { ChatMessageEntry, TurnRecord } from '../lib/turns/types';
 import { getLiveFinalMessage } from '../lib/turns/liveActivity';
 import { summarizeLiveActivity } from '../lib/turns/liveActivitySummary';
 import { LiveActivityCollapse } from './LiveActivityCollapse';
-import { LiveFinalActivityContext } from './liveActivityContext';
+import { LiveActivitySplitContext } from './liveActivityContext';
 import { TurnMessageWindow } from './TurnMessageWindow';
 import { TurnMessageWindowContext, isReaderAtTimelineEnd, openedFoldMessageWindow } from '../lib/turns/turnMessageWindow';
+import { useUIStore } from '@/stores/useUIStore';
 
 interface LiveTurnActivityProps {
     turn: TurnRecord;
@@ -32,9 +33,19 @@ export function LiveTurnActivity({ turn, hasLaterAssistant, expanded, onToggle, 
     const previouslySettled = React.useRef(settled);
     const animateFinalCollapse = settled && !previouslySettled.current;
     React.useLayoutEffect(() => { previouslySettled.current = settled; }, [settled]);
+    const justificationOutsideActivity = useUIStore((state) => state.justificationOutsideActivity);
+    const splitMessageIds = React.useMemo(
+        () => new Set(turn.assistantMessages.map((message) => message.info.id)),
+        [turn.assistantMessages],
+    );
     const finalContext = React.useMemo(() => finalMessage ? {
-        messageId: finalMessage.info.id, expanded: isExpanded, contentId: finalContentId, animateCollapse: animateFinalCollapse,
-    } : null, [finalMessage, isExpanded, finalContentId, animateFinalCollapse]);
+        messageIds: new Set([finalMessage.info.id]), expanded: isExpanded, animateCollapse: animateFinalCollapse,
+    } : null, [finalMessage, isExpanded, animateFinalCollapse]);
+    // Every message of the turn splits when justification stays visible, so the
+    // model's intermediate text sits between the collapsed tool groups.
+    const allMessagesContext = React.useMemo(() => ({
+        messageIds: splitMessageIds, expanded: isExpanded, animateCollapse: animateFinalCollapse,
+    }), [splitMessageIds, isExpanded, animateFinalCollapse]);
     // No diff parsing at token frequency. The report is only shown once the
     // turn settles; later authoritative tool metadata can refine it.
     const summary = React.useMemo(() => settled ? summarizeLiveActivity(turn.assistantMessages) : null,
@@ -84,18 +95,27 @@ export function LiveTurnActivity({ turn, hasLaterAssistant, expanded, onToggle, 
                 <div className="chat-message-column @container">
                     <div className="mt-1">
                         <Button variant="ghost" size="sm" className={headerClass} onClick={handleToggle}
-                            aria-expanded={isExpanded} aria-controls={finalMessage ? `${contentId} ${finalContentId}` : contentId}>
+                            aria-expanded={isExpanded} aria-controls={justificationOutsideActivity ? undefined : (finalMessage ? `${contentId} ${finalContentId}` : contentId)}>
                             {label}
                         </Button>
                     </div>
                 </div>
             ) : null}
-            <LiveActivityCollapse expanded={isExpanded} id={contentId}>
-                <TurnMessageWindow turnId={turn.turnId} messages={activityMessages} renderMessage={renderMessage} />
-            </LiveActivityCollapse>
-            <LiveFinalActivityContext.Provider value={finalContext}>
-                {finalMessage ? renderMessage(finalMessage) : null}
-            </LiveFinalActivityContext.Provider>
+            {justificationOutsideActivity ? (
+                <LiveActivitySplitContext.Provider value={allMessagesContext}>
+                    <TurnMessageWindow turnId={turn.turnId} messages={activityMessages} renderMessage={renderMessage} />
+                    {finalMessage ? renderMessage(finalMessage) : null}
+                </LiveActivitySplitContext.Provider>
+            ) : (
+                <>
+                    <LiveActivityCollapse expanded={isExpanded} id={contentId}>
+                        <TurnMessageWindow turnId={turn.turnId} messages={activityMessages} renderMessage={renderMessage} />
+                    </LiveActivityCollapse>
+                    <LiveActivitySplitContext.Provider value={finalContext}>
+                        {finalMessage ? renderMessage(finalMessage) : null}
+                    </LiveActivitySplitContext.Provider>
+                </>
+            )}
         </div>
     );
 }
