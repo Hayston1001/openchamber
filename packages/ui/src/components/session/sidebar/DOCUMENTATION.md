@@ -220,7 +220,9 @@ also show the goal glyph and the permission/question badges
 end of the branch line on timeline rows. Counts come from the cross-directory
 request index (`sync/global-blocking-requests.ts`), not directory stores, so a
 never-opened project still shows them; a collapsed or timeline row also counts
-its subsessions' requests. Row memoization
+its subsessions' requests. The question count counts questions, not requests: a
+form holds one field per question, so a single request that asks three shows as
+three. Row memoization
 compares `metadata` by reference and `time.idle`, so metadata-only changes
 (work, goal, recap) re-render the row.
 

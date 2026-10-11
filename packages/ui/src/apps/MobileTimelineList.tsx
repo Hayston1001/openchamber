@@ -155,7 +155,7 @@ const MobileTimelineRow: React.FC<{
   const { descendantIdsOf } = handlers;
   const familyIds = React.useMemo(() => [session.id, ...descendantIdsOf(session.id)], [descendantIdsOf, session.id]);
   const pendingRequests = usePendingRequestCounts(familyIds);
-  const hasPendingRequests = pendingRequests.permissionCount > 0 || pendingRequests.formCount > 0;
+  const hasPendingRequests = pendingRequests.permissionCount > 0 || pendingRequests.questionCount > 0;
   const hasGoal = getSessionGoal(session) !== null;
 
   return (

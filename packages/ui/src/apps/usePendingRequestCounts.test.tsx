@@ -20,7 +20,7 @@ describe('usePendingRequestCounts', () => {
     };
     try {
       await act(async () => root.render(React.createElement(Harness)));
-      expect(capture.counts).toEqual({ permissionCount: 0, formCount: 0 });
+      expect(capture.counts).toEqual({ permissionCount: 0, questionCount: 0 });
 
       // A request in an unrelated session neither counts nor re-renders the row.
       const idleRenders = capture.renders;
@@ -34,13 +34,50 @@ describe('usePendingRequestCounts', () => {
         { type: 'permission.asked', properties: { id: 'p1', sessionID: 'child', action: 'bash', resources: [] } },
         { type: 'form.created', properties: { form: { id: 'q1', sessionID: 'parent', title: 'Pick', fields: [{ key: 'answer', type: 'boolean' }] } } },
       ]));
-      expect(capture.counts).toEqual({ permissionCount: 1, formCount: 1 });
+      expect(capture.counts).toEqual({ permissionCount: 1, questionCount: 1 });
 
       await act(async () => applyGlobalBlockingRequestEvents('/workspace', [
         { type: 'permission.replied', properties: { sessionID: 'child', requestID: 'p1' } },
         { type: 'form.settled', properties: { sessionID: 'parent', formID: 'q1' } },
       ]));
-      expect(capture.counts).toEqual({ permissionCount: 0, formCount: 0 });
+      expect(capture.counts).toEqual({ permissionCount: 0, questionCount: 0 });
+    } finally {
+      await act(async () => root.unmount());
+      resetGlobalBlockingRequests();
+      dom.restore();
+    }
+  });
+
+  test('sums the questions a single multi-question form asks', async () => {
+    const dom = installHookTestDom();
+    const root = createRoot(dom.container);
+    let counts: PendingRequestCounts | null = null;
+    const Harness = () => {
+      counts = usePendingRequestCounts(FAMILY);
+      return null;
+    };
+    try {
+      await act(async () => root.render(React.createElement(Harness)));
+      // One `question` tool call with three questions arrives as one form with
+      // three fields, so the row badge reads three, not one.
+      await act(async () => applyGlobalBlockingRequestEvents('/workspace', [
+        {
+          type: 'form.created',
+          properties: {
+            form: {
+              id: 'q-many',
+              sessionID: 'parent',
+              title: 'Questions',
+              fields: [
+                { key: 'q0', type: 'string' },
+                { key: 'q1', type: 'string' },
+                { key: 'q2', type: 'string' },
+              ],
+            },
+          },
+        },
+      ]));
+      expect(counts).toEqual({ permissionCount: 0, questionCount: 3 });
     } finally {
       await act(async () => root.unmount());
       resetGlobalBlockingRequests();

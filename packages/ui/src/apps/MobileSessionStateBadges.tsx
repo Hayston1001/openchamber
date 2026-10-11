@@ -25,12 +25,12 @@ export const MobileSessionGoalGlyph: React.FC<{ session: Session }> = ({ session
 };
 
 /** The permission and question badges the desktop sidebar shows. */
-export const MobileSessionPendingBadges: React.FC<PendingRequestCounts> = ({ permissionCount, formCount }) => {
+export const MobileSessionPendingBadges: React.FC<PendingRequestCounts> = ({ permissionCount, questionCount }) => {
   const { t } = useI18n();
-  if (permissionCount === 0 && formCount === 0) return null;
-  const formLabel = formCount === 1
+  if (permissionCount === 0 && questionCount === 0) return null;
+  const questionLabel = questionCount === 1
     ? t('sessions.sidebar.session.status.questionPendingSingle')
-    : t('sessions.sidebar.session.status.questionPendingMany', { count: formCount });
+    : t('sessions.sidebar.session.status.questionPendingMany', { count: questionCount });
   return (
     <>
       {permissionCount > 0 ? (
@@ -42,13 +42,13 @@ export const MobileSessionPendingBadges: React.FC<PendingRequestCounts> = ({ per
           <span className="leading-none tabular-nums">{permissionCount}</span>
         </span>
       ) : null}
-      {formCount > 0 ? (
+      {questionCount > 0 ? (
         <span
           className="inline-flex shrink-0 items-center gap-1 rounded bg-status-info/10 px-1 py-0.5 text-[0.7rem] text-status-info"
-          aria-label={formLabel}
+          aria-label={questionLabel}
         >
           <Icon name="question" className="size-3" />
-          <span className="leading-none tabular-nums">{formCount}</span>
+          <span className="leading-none tabular-nums">{questionCount}</span>
         </span>
       ) : null}
     </>

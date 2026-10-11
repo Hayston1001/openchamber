@@ -108,12 +108,20 @@ export const createSessionRuntime = ({ writeSseEvent, getNotificationClients, br
     }
   };
 
+  // A form asks one question per field, and a client badge counts questions
+  // rather than requests. Carry the field count so a row can show three for a
+  // single request that asks three questions. A malformed form (no fields
+  // array) still blocks the turn, so it counts as the one request it is.
+  const countFormQuestions = (form) => (
+    Array.isArray(form.fields) && form.fields.length > 0 ? form.fields.length : 1
+  );
+
   const getPendingBlockingRequestsSnapshot = () => {
     const result = {};
     for (const [sessionId, entry] of pendingRequestsBySession) {
       result[sessionId] = {
         permissions: [...entry.permissions.values()],
-        forms: [...entry.forms.values()],
+        forms: [...entry.forms.values()].map((form) => ({ ...form, questionCount: countFormQuestions(form) })),
       };
     }
     return result;

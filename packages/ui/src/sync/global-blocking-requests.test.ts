@@ -12,11 +12,18 @@ import {
 const permission = (id: string, sessionID: string): BlockingPermissionRequest => ({
   id, sessionID, action: 'bash', resources: ['rm *'],
 });
-const form = (id: string, sessionID: string): BlockingFormRequest => ({ id, sessionID, title: 'Pick one' });
+const form = (id: string, sessionID: string): BlockingFormRequest => ({ id, sessionID, title: 'Pick one', questionCount: 1 });
 const permissionAsked = (request: BlockingPermissionRequest): SyncEvent => ({ type: 'permission.asked', properties: request });
 const formCreated = (request: BlockingFormRequest): SyncEvent => ({
   type: 'form.created',
-  properties: { form: { ...request, fields: [{ key: 'answer', type: 'boolean' }] } },
+  properties: {
+    form: {
+      id: request.id,
+      sessionID: request.sessionID,
+      title: request.title,
+      fields: [{ key: 'answer', type: 'boolean' }],
+    },
+  },
 });
 const bySession = () => useGlobalBlockingRequestsStore.getState().bySession;
 
@@ -35,6 +42,26 @@ describe('global blocking requests index', () => {
     ]);
     expect(bySession().has('s1')).toBe(false);
     expect(bySession().has('s2')).toBe(true);
+  });
+
+  test('keeps the number of questions a form asks, one per field', () => {
+    applyGlobalBlockingRequestEvents('/far', [{
+      type: 'form.created',
+      properties: {
+        form: {
+          id: 'q1',
+          sessionID: 's1',
+          title: 'Questions',
+          fields: [
+            { key: 'q0', type: 'string' },
+            { key: 'q1', type: 'string' },
+            { key: 'q2', type: 'string' },
+          ],
+        },
+      },
+    }]);
+
+    expect(bySession().get('s1')?.forms[0]?.questionCount).toBe(3);
   });
 
   test('a reply without a request id settles that kind for the session, and deletion clears it', () => {

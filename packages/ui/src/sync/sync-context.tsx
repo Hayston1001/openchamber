@@ -4,15 +4,16 @@ import type { StoreApi } from "zustand"
 import { useStore } from "zustand"
 import type { OpenCodeClient } from "@opencode/client"
 import { syncEventMessageID, syncEventSessionID, type CatalogKind, type OpenchamberNotification, type SyncEvent } from "@/lib/opencode/events"
-import type {
-  FormRequest,
-  Message,
-  Part,
-  PermissionRequest,
-  Session,
-  SessionOutcome,
-  SessionStatus,
-  StructuredError,
+import {
+  countFormQuestions,
+  type FormRequest,
+  type Message,
+  type Part,
+  type PermissionRequest,
+  type Session,
+  type SessionOutcome,
+  type SessionStatus,
+  type StructuredError,
 } from "@/lib/opencode/model"
 import { createEventPipeline } from "./event-pipeline"
 import { isVSCodeRuntime } from "@/lib/desktop"
@@ -3443,12 +3444,12 @@ export function useSessionForms(sessionID: string, directory?: string) {
 
 type SessionBlockingRequestCounts = {
   permissionCount: number
-  formCount: number
+  questionCount: number
 }
 
 const EMPTY_SESSION_BLOCKING_REQUEST_COUNTS: SessionBlockingRequestCounts = {
   permissionCount: 0,
-  formCount: 0,
+  questionCount: 0,
 }
 
 /**
@@ -3476,19 +3477,21 @@ export function useSessionBlockingRequestCounts(
   const snapshotRef = useRef(EMPTY_SESSION_BLOCKING_REQUEST_COUNTS)
   const getSnapshot = React.useCallback(() => {
     let permissionCount = 0
-    let formCount = 0
+    let questionCount = 0
     for (const { sessionIDs, store } of scopedStores) {
       const { permission: permissions, form: forms } = store.getState()
       for (const sessionID of sessionIDs) {
         permissionCount += permissions[sessionID]?.length ?? 0
-        formCount += forms[sessionID]?.length ?? 0
+        // A form carries one question per field, so a multi-question request
+        // counts as the several questions the row is waiting on.
+        for (const form of forms[sessionID] ?? []) questionCount += countFormQuestions(form)
       }
     }
     const previous = snapshotRef.current
-    if (previous.permissionCount === permissionCount && previous.formCount === formCount) {
+    if (previous.permissionCount === permissionCount && previous.questionCount === questionCount) {
       return previous
     }
-    const next = { permissionCount, formCount }
+    const next = { permissionCount, questionCount }
     snapshotRef.current = next
     return next
   }, [scopedStores])

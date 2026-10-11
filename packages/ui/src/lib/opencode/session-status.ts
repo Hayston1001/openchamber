@@ -16,6 +16,9 @@ const hostFormRequestSchema = z.object({
   id: z.string().min(1),
   sessionID: z.string().min(1),
   title: z.string(),
+  // A form carries one question per field. Hosts predating the field omit it,
+  // and one request is then the single question they always treated it as.
+  questionCount: z.number().int().nonnegative().default(1),
 })
 
 // Cross-project status kept by the OpenChamber host (web server or VS Code

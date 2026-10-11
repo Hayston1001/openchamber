@@ -666,7 +666,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   );
   const {
     permissionCount: pendingPermissionCount,
-    formCount: pendingFormCount,
+    questionCount: pendingQuestionCount,
   } = useSessionBlockingRequestCounts(blockingBadgeSessionScopes);
   const isSubtaskSession = Boolean(resolvedSession.parentID);
   const unseenCount = useSessionUnseenCount(session.id);
@@ -974,9 +974,9 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     );
   }
 
-  const pendingFormLabel = pendingFormCount === 1
+  const pendingQuestionLabel = pendingQuestionCount === 1
     ? t('sessions.sidebar.session.status.questionPendingSingle')
-    : t('sessions.sidebar.session.status.questionPendingMany', { count: pendingFormCount });
+    : t('sessions.sidebar.session.status.questionPendingMany', { count: pendingQuestionCount });
   // Actions are permanently visible (with matching permanent padding) only in
   // the non-VSCode alwaysShowActions layout; every other layout hover-reveals
   // them over the row's right edge, where the badges live (#2284).
@@ -1608,7 +1608,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   ) : null);
   // Timeline rows carry the done hint in their first line instead.
   const badgeDoneHint = !isTimelineRow && showDoneHint;
-  const rowBadges = (pendingPermissionCount > 0 || pendingFormCount > 0 || badgeDoneHint) ? (
+  const rowBadges = (pendingPermissionCount > 0 || pendingQuestionCount > 0 || badgeDoneHint) ? (
     <>
       {badgeDoneHint ? doneHintBadge() : null}
       {pendingPermissionCount > 0 ? (
@@ -1617,10 +1617,10 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
           <span className="leading-none">{pendingPermissionCount}</span>
         </span>
       ) : null}
-      {pendingFormCount > 0 ? (
-        <span className="inline-flex flex-shrink-0 items-center gap-1 rounded bg-status-info/10 px-1 py-0.5 text-[0.7rem] text-status-info" title={pendingFormLabel} aria-label={pendingFormLabel}>
+      {pendingQuestionCount > 0 ? (
+        <span className="inline-flex flex-shrink-0 items-center gap-1 rounded bg-status-info/10 px-1 py-0.5 text-[0.7rem] text-status-info" title={pendingQuestionLabel} aria-label={pendingQuestionLabel}>
           <Icon name="question" className="h-3 w-3" />
-          <span className="leading-none">{pendingFormCount}</span>
+          <span className="leading-none">{pendingQuestionCount}</span>
         </span>
       ) : null}
     </>
@@ -1915,10 +1915,10 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
                           <span className="leading-none">{pendingPermissionCount}</span>
                         </span>
                       ) : null}
-                      {pendingFormCount > 0 ? (
-                        <span className={cn('inline-flex items-center gap-1 rounded bg-status-info/10 px-1 py-0.5 text-[0.7rem] text-status-info flex-shrink-0', badgeVisibilityClass)} title={pendingFormLabel} aria-label={pendingFormLabel}>
+                      {pendingQuestionCount > 0 ? (
+                        <span className={cn('inline-flex items-center gap-1 rounded bg-status-info/10 px-1 py-0.5 text-[0.7rem] text-status-info flex-shrink-0', badgeVisibilityClass)} title={pendingQuestionLabel} aria-label={pendingQuestionLabel}>
                           <Icon name="question" className="h-3 w-3" />
-                          <span className="leading-none">{pendingFormCount}</span>
+                          <span className="leading-none">{pendingQuestionCount}</span>
                         </span>
                       ) : null}
                     </div>

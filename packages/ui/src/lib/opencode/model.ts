@@ -367,6 +367,20 @@ export type PermissionReply = "once" | "always" | "reject"
 /** OpenCode v2 replaced the question tool with typed forms. */
 export type FormRequest = FormInfo
 
+/**
+ * The questions a pending form is waiting on.
+ *
+ * A v2 form is one request that carries one typed field per question the agent
+ * asked: the `question` tool maps its `questions` array straight onto `fields`.
+ * So a row badge counts fields, not requests, and one call with three questions
+ * shows three. A malformed form (no fields array) still blocks the turn, so it
+ * counts as the single request it is.
+ */
+export function countFormQuestions(form: Pick<FormRequest, "fields">): number {
+  const fields = form.fields
+  return Array.isArray(fields) && fields.length > 0 ? fields.length : 1
+}
+
 // ---------------------------------------------------------------------------
 // Part identity
 // ---------------------------------------------------------------------------

@@ -30,6 +30,18 @@ const createSdk = () => OpenCode.make({
 
 const permission = (id: string, sessionID: string): PermissionRequest => ({ id, sessionID, action: 'bash', resources: [] })
 const form = (id: string, sessionID: string): FormRequest => ({ id, sessionID, title: 'Answer', fields: [{ key: 'answer', type: 'boolean' }] })
+// A `question` tool call that asks several questions arrives as one form with
+// one field per question, so the badge must read the questions, not the request.
+const multiQuestionForm = (id: string, sessionID: string): FormRequest => ({
+  id,
+  sessionID,
+  title: 'Questions',
+  fields: [
+    { key: 'q0', type: 'string' },
+    { key: 'q1', type: 'string' },
+    { key: 'q2', type: 'string' },
+  ],
+})
 
 type ProbeStores = {
   parent: ReturnType<typeof useDirectoryStore>
@@ -37,7 +49,7 @@ type ProbeStores = {
 }
 
 let stores: ProbeStores | null = null
-let renderedCounts: { permissionCount: number; formCount: number } | null = null
+let renderedCounts: { permissionCount: number; questionCount: number } | null = null
 let renderCount = 0
 
 /**
@@ -108,7 +120,7 @@ describe('useSessionBlockingRequestCounts', () => {
   test('rolls a hidden cross-directory subagent permission up to its collapsed parent (#2247)', async () => {
     await withProbe(true, async () => {
       // An unbootstrapped store contributes zero rather than inventing a count.
-      expect(renderedCounts).toEqual({ permissionCount: 0, formCount: 0 })
+      expect(renderedCounts).toEqual({ permissionCount: 0, questionCount: 0 })
 
       await seedPermissions()
 
@@ -135,7 +147,7 @@ describe('useSessionBlockingRequestCounts', () => {
     })
   })
 
-  test('counts forms and permissions independently for the same scopes', async () => {
+  test('counts questions and permissions independently for the same scopes', async () => {
     await withProbe(true, async () => {
       await act(async () => {
         stores!.child.setState({
@@ -144,7 +156,21 @@ describe('useSessionBlockingRequestCounts', () => {
         })
       })
 
-      expect(renderedCounts).toEqual({ permissionCount: 1, formCount: 2 })
+      expect(renderedCounts).toEqual({ permissionCount: 1, questionCount: 2 })
+    })
+  })
+
+  test('counts the questions inside a multi-question form, not the single request', async () => {
+    await withProbe(true, async () => {
+      await act(async () => {
+        stores!.child.setState({
+          form: { child: [multiQuestionForm('child-form', 'child')] },
+        })
+      })
+
+      // The `question` tool maps its questions array one-to-one onto fields, so
+      // a single request that asks three questions shows as three.
+      expect(renderedCounts?.questionCount).toBe(3)
     })
   })
 })

@@ -27,7 +27,7 @@ describe('session runtime', () => {
     runtime.processOpenCodeSsePayload({ type: 'form.created', properties: { sessionID: 'session-2', form } });
     expect(runtime.getPendingBlockingRequestsSnapshot()).toEqual({
       'session-1': { permissions: [permission], forms: [] },
-      'session-2': { permissions: [], forms: [form] },
+      'session-2': { permissions: [], forms: [{ ...form, questionCount: 1 }] },
     });
 
     runtime.processOpenCodeSsePayload({ type: 'permission.replied', properties: { sessionID: 'session-1', requestID: 'perm-1' } });
