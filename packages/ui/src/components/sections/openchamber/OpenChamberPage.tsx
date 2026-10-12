@@ -204,7 +204,6 @@ const ChatSectionContent: React.FC = () => {
             visibleSettings={[
                 'sessionGoal',
                 'sessionAssist',
-                'chatRenderMode',
                 'activityRenderMode',
                 'userMessageRendering',
                 'mermaidRendering',
@@ -212,7 +211,6 @@ const ChatSectionContent: React.FC = () => {
                 'showToolFileIcons',
                 'showTurnChangedFiles',
                 'collapsibleUserMessages',
-                'stickyUserHeader',
                 'promptNavigatorEnabled',
                 'wideChatLayout',
                 'codeBlockLineWrap',

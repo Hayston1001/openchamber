@@ -48,12 +48,25 @@ Built-in palettes place the sidebar below the chat canvas in luminance. Fields
 and elevated panels are lighter than the canvas in dark mode and darker in light
 mode. Mono and Mono Plus keep their pure-black dark canvas, so their sidebars are
 the exception. User-message backgrounds take on the primary's hue at their own
-lightness (`tintColor`: 16% of its chroma in dark, 10% in light), so the bubble
+lightness (`tintColor`: 16% of its chroma in dark, 6% in light), so the bubble
 reads as colored without becoming a brighter patch, with enough separation from
 the canvas to remain visible. Mono keeps every role grayscale.
 Body, secondary and bold text retain the palette's neutral cast with distinct
 contrast levels; bold text is a stronger body color rather than a syntax accent.
 These authored choices apply to built-ins, not to existing custom theme files.
+
+Catppuccin Mocha keeps the official palette for its surfaces and revised text,
+tool and interaction roles. Body, bold and italic text use Text; secondary text
+uses Subtext 0. Bold and italic retain their emphasis through typography.
+Elevated panels use Mantle, retaining Mocha's original recessed panel fill
+rather than the lighter elevated hierarchy used by other built-ins. User-message
+bubbles also use Mantle. Fenced code backgrounds use Base, matching the chat
+canvas. Inline code backgrounds use Surface 0, retaining the original chip fill
+and separating it from Mantle-backed tables even with the renderer's 50% alpha.
+Borders use Overlay 1 with alpha; hover and pressed states use Text with alpha.
+Body and secondary text retain the official contrasts rather than the softened
+text targets used by adapted palettes. These exceptions are authored in the
+built-in definition; the shared theme resolver and VS Code adaptation are unchanged.
 
 Built-in border strength uses OpenChamber's matching light/dark palette as the
 reference. Compare alpha-composited contrast on canvas, sidebar and elevated
@@ -94,8 +107,10 @@ the canvas permits it; a black canvas keeps a black sidebar. Body text is soften
 to a canvas contrast ceiling of 10 in dark and 9 in light, with a readability
 floor of 7 across shared surfaces when possible. Secondary text targets 4.6–6.
 Readability takes precedence over ceilings. Bubble text is checked after adding
-the primary tint. Bold uses stronger neutral text. Code backgrounds stay
-within 1.10 of the canvas; syntax token and diff colors retain their source values.
+the primary tint. Bold uses stronger neutral text. Code backgrounds keep their
+source lightness but take the canvas hue, so a neutral code fill does not sit as a
+cold slab inside a warm theme, and stay within 1.10 of the canvas; syntax token and
+diff colors retain their source values.
 
 Borders use the matching OpenChamber role's contrast on each corresponding
 surface as a baseline, including explicit tool and quote borders. Each cap allows

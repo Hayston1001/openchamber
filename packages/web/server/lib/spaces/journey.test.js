@@ -35,7 +35,7 @@ afterEach(() => {
 });
 
 /** A journey on fresh stand-ins. `failAt` names a stand-in step that rejects. */
-const journeyWith = ({ readHostLogin = null, failAt = null, place = createMemoryPlace(), morePlaces = [], projects = [PROJECT], historyStatus = 'sent', holdCodeIn = false, holdCodeOut = false, holdIdleSave = false, holdReady = false, holdLoginRow = false, hostEnvironment = {}, hostLogin = null, dataDir = null, archiveChats = null, logger = quiet } = {}) => {
+const journeyWith = ({ readHostLogin = null, failAt = null, place = createMemoryPlace(), morePlaces = [], projects = [PROJECT], historyStatus = 'sent', holdCodeIn = false, holdCodeOut = false, holdIdleSave = false, holdReady = false, holdLoginRow = false, hostEnvironment = {}, hostLogin = null, dataDir = null, archiveChats = null, logger = quiet, resolveDirectory = undefined } = {}) => {
   // With `holdCodeIn`, code in waits until the test lets it go, so a creation stays under way;
   // `holdCodeOut` does the same for the fetch of an apply.
   let releaseCodeIn = () => {};
@@ -119,6 +119,7 @@ const journeyWith = ({ readHostLogin = null, failAt = null, place = createMemory
     readHostSecret: (name) => hostEnvironment[name],
     readHostLogin: readHostLogin ?? (async (provider) => (hostLogin && provider === 'openai' ? hostLogin : null)),
     folderExists: async () => true,
+    resolveDirectory,
     readIdleStop: async () => idle.saved ?? { enabled: true, hours: 4 },
     saveIdleStop: async (setting) => { if (holdIdleSave) await idleSaveHeld; fail('saveIdleStop'); idle.saved = setting; },
     announce: (spaceId, payload) => { events.push({ spaceId, ...payload.properties }); },
@@ -203,6 +204,17 @@ describe('the journey: create', () => {
     expect(await until(() => steps(events, open.id).includes('ready'))).toBe(true);
   });
 
+  it('takes the project folder in the UI\'s spelling and makes the space for the folder the settings name', async () => {
+    // On Windows the UI sends forward slashes and the settings keep backslashes.
+    const registered = 'C:\\Users\\me\\project';
+    const { journey, events, records } = journeyWith({ projects: [registered], resolveDirectory: path.win32.resolve });
+    const space = await journey.createSpace({ ...REQUEST, projectDirectory: 'C:/Users/me/project/' });
+    expect(space.projectDirectory).toBe(registered);
+    expect(await until(() => steps(events, space.id).includes('ready'))).toBe(true);
+    expect(records.read(space.id).record.repository).toBe(registered);
+    await expect(journey.createSpace({ ...REQUEST, projectDirectory: 'C:/Users/me/other' })).rejects.toMatchObject({ code: 'project_not_registered' });
+  });
+
   it('refuses a bad request before anything runs', async () => {
     const { journey, place, events } = journeyWith();
     await expect(journey.createSpace({ ...REQUEST, projectDirectory: '/home/me/other' })).rejects.toMatchObject({ code: 'project_not_registered' });
@@ -218,7 +230,7 @@ describe('the journey: create', () => {
 });
 
 describe('the journey: two places', () => {
-  const remote = () => createMemoryPlace({ id: 'remote' });
+  const remote = () => ({ ...createMemoryPlace({ id: 'remote' }), machine: 'box' });
 
   it('makes a space on the place the request names, remembers it in the record, and routes its actions there', async () => {
     const second = remote();
@@ -241,7 +253,8 @@ describe('the journey: two places', () => {
   it('lists a space whose place is no longer configured as unreachable, and a delete forgets its record and nothing else', async () => {
     const { journey, records, place } = journeyWith();
     records.write('c1c2c3d4e5f6', { placeId: 'cluster', name: 'Elsewhere', created: '2026-10-11T10:00:00.000Z', network: { mode: 'open' }, repository: PROJECT, spacePath: '/spaces/c1c2c3d4e5f6/project' });
-    expect((await journey.listSpaces())[0]).toMatchObject({ id: 'c1c2c3d4e5f6', placeId: 'cluster', name: 'Elsewhere', state: 'unreachable' });
+    // Its place is gone, so no machine is known, and the failure says a delete would forget the record.
+    expect((await journey.listSpaces())[0]).toMatchObject({ id: 'c1c2c3d4e5f6', placeId: 'cluster', machine: null, name: 'Elsewhere', state: 'unreachable', failure: { code: 'place_not_found' } });
     const gone = await journey.removeSpace('c1c2c3d4e5f6', { allowUnsaved: true });
     expect(gone).toMatchObject({ removed: false, failures: [{ code: 'place_not_found' }] });
     expect(records.read('c1c2c3d4e5f6')).toEqual({ status: 'missing', record: null });
@@ -258,6 +271,20 @@ describe('the journey: two places', () => {
     await expect(journey.createSpace({ ...REQUEST, placeId: 'cluster' })).rejects.toMatchObject({ code: 'place_not_found' });
   });
 
+  it('is idle only while no creation and no action is under way; a failed creation does not hold it', async () => {
+    const { journey, events, releaseCodeIn } = journeyWith({ holdCodeIn: true });
+    expect(journey.isIdle()).toBe(true);
+    const { id } = await journey.createSpace(REQUEST);
+    expect(journey.isIdle()).toBe(false);
+    releaseCodeIn();
+    expect(await until(() => steps(events, id).includes('ready'))).toBe(true);
+    expect(journey.isIdle()).toBe(true);
+    const failing = journeyWith({ failAt: 'setNetwork' });
+    const failed = await failing.journey.createSpace(REQUEST);
+    expect(await until(() => steps(failing.events, failed.id).includes('failed'))).toBe(true);
+    expect(failing.journey.isIdle()).toBe(true);
+  });
+
   it('keeps listing the spaces of a place that cannot be asked, as unreachable, from the records', async () => {
     const second = remote();
     const logs = [];
@@ -271,7 +298,9 @@ describe('the journey: two places', () => {
 
     const listed = await journey.listSpaces();
     expect(listed.map(({ id, placeId, state }) => [id, placeId, state])).toEqual([[local.id, 'memory', 'running'], [away.id, 'remote', 'unreachable']]);
-    expect(listed[1]).toMatchObject({ name: 'On the box', projectDirectory: PROJECT, directory: `/spaces/${away.id}/project`, network: NETWORK, step: null, failure: null, damaged: false });
+    // The machine of the place, and the place's failure, so the group can say why the space is out of reach.
+    expect(listed[1]).toMatchObject({ name: 'On the box', machine: 'box', projectDirectory: PROJECT, directory: `/spaces/${away.id}/project`, network: NETWORK, step: null, failure: { code: 'place_unreachable', message: 'box did not answer' }, damaged: false });
+    expect(listed[0].machine).toBeNull();
     expect(logs.filter((line) => line.includes('cannot be asked'))).toHaveLength(1);
     await journey.listSpaces();
     expect(logs.filter((line) => line.includes('cannot be asked'))).toHaveLength(1);
@@ -1244,7 +1273,7 @@ describe('the journey: the project folder of a space', () => {
     const asked = [];
     // The record names the folder: a journey that no longer has the project still lists it.
     const unregistered = createSpaceJourney({
-      manager: first.manager, place: first.place, gatekeeper: first.gatekeeper, codeIn: {}, codeOut: {}, records: first.records,
+      manager: first.manager, places: createPlaceRegistry([first.place]), gatekeeper: first.gatekeeper, codeIn: {}, codeOut: {}, records: first.records,
       spaceOpenCode: {}, serverInside: {}, restartOpenCodeInside: async () => {},
       listProjectDirectories: async () => [],
       folderExists: async (directory) => { asked.push(directory); return false; },
@@ -1261,7 +1290,7 @@ describe('the journey: the project folder of a space', () => {
     fs.writeFileSync(file, '');
     const { first } = await made();
     const look = (directory) => createSpaceJourney({
-      manager: first.manager, place: first.place, gatekeeper: first.gatekeeper, codeIn: {}, codeOut: {}, records: { read: () => ({ record: { repository: directory } }) },
+      manager: first.manager, places: createPlaceRegistry([first.place]), gatekeeper: first.gatekeeper, codeIn: {}, codeOut: {}, records: { read: () => ({ record: { repository: directory } }) },
       spaceOpenCode: {}, serverInside: {}, restartOpenCodeInside: async () => {},
       listProjectDirectories: async () => [],
       logger: quiet,

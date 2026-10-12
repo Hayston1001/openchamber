@@ -53,7 +53,7 @@
     },
     "syntax": {
       "base": {
-        "background": "#fcfcfc",
+        "background": "#fcfcf7",
         "comment": "#7d7f97",
         "keyword": "#d16090",
         "string": "#596600",
@@ -90,7 +90,7 @@
     },
     "chat": {
       "background": "#f9f9f4",
-      "userMessageBackground": "#eaebf5",
+      "userMessageBackground": "#ebebf0",
       "divider": "#0000001a"
     },
     "markdown": {

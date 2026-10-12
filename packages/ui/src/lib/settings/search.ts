@@ -234,12 +234,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['security', 'app link', 'deep link', 'scheme', 'protocol', 'obsidian', 'notion'],
   },
   {
-    id: 'chat.render-mode',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.section.chatRenderMode',
-    keywords: ['messages', 'conversation', 'rendering'],
-  },
-  {
     id: 'chat.message-transport',
     page: 'general',
     titleKey: 'settings.openchamber.visual.section.messageStreamTransport',
@@ -324,12 +318,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.visual.field.streamingAutoFollow',
     descriptionKey: 'settings.openchamber.visual.field.streamingAutoFollowInfo',
     keywords: ['autoscroll', 'auto-scroll', 'follow', 'stick to bottom', 'streaming'],
-  },
-  {
-    id: 'chat.sticky-user-header',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.field.stickyUserHeader',
-    keywords: ['messages', 'header'],
   },
   {
     id: 'chat.prompt-navigator',
@@ -781,6 +769,15 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => !ctx.isVSCode && ISOLATED_SPACES_RELEASED && useUIStore.getState().isolatedSpacesEnabled,
   },
   {
+    id: 'general.isolated-spaces-machine',
+    page: 'isolated-spaces',
+    titleKey: 'settings.openchamber.spaces.places.machine.label',
+    descriptionKey: 'settings.openchamber.spaces.places.machine.info',
+    keywords: ['machine', 'ssh', 'remote', 'docker', 'space', 'spaces', 'host', 'server'],
+    // Rendered only while the switch is on, and never before the feature's release or in VS Code.
+    isAvailable: (ctx) => !ctx.isVSCode && ISOLATED_SPACES_RELEASED && useUIStore.getState().isolatedSpacesEnabled,
+  },
+  {
     id: 'sessions.agent-memory-tool',
     page: 'general',
     titleKey: 'settings.openchamber.tools.field.agentMemoryTool',
@@ -916,16 +913,17 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['thinking', 'variant', 'reasoning', 'effort', 'model', 'project metadata'],
   },
   {
-    id: 'projects.accent-color',
-    page: 'projects',
-    titleKey: 'settings.projects.page.field.accentColor',
-    keywords: ['color', 'appearance', 'project metadata'],
-  },
-  {
     id: 'projects.icon',
     page: 'projects',
     titleKey: 'settings.projects.page.field.projectIcon',
-    keywords: ['icon', 'favicon', 'upload', 'project metadata'],
+    keywords: ['icon', 'favicon', 'upload', 'color', 'accent color', 'appearance', 'project metadata'],
+  },
+  {
+    id: 'projects.actions',
+    page: 'projects',
+    titleKey: 'settings.projects.actions.title',
+    descriptionKey: 'settings.projects.actions.info',
+    keywords: ['run', 'run button', 'commands', 'dev server', 'scripts', 'project actions'],
   },
   {
     id: 'projects.worktree',
@@ -956,8 +954,8 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   {
     id: 'projects.shared',
     page: 'projects',
-    titleKey: 'settings.projects.shared.title',
-    descriptionKey: 'settings.projects.shared.description',
+    titleKey: 'settings.projects.team.title',
+    descriptionKey: 'settings.projects.team.info',
     keywords: ['shared', 'team', 'repository', '.openchamber', 'project.json', 'trust'],
   },
   {

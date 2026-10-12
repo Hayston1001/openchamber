@@ -255,18 +255,21 @@ toggles, then Collapse all / Expand all.
 - Chats rows render with `renderContext: 'timeline-chat'` in both views: one
   line, no left gutter, pin marker and status icon on the right beside the
   time; the goal glyph and badges ride in the same cluster. Its Show more and
-  empty rows carry `flat`, so they line up with that text. The List view opens
-  Chats with a reveal of 3 instead of the usual Chats limit; pinned chats are
-  always shown there and never spend that limit, so Show more/Show fewer count
-  only unpinned rows. Collapsing a zone header resets its Show more state.
+  empty rows carry `flat`, so they line up with that text. Both views, on
+  every surface, open Chats with a reveal of 3 and 7 more per Show more;
+  pinned chats are always shown and never spend that limit, so Show more/Show
+  fewer count only unpinned rows. Pinned sessions under a project do spend
+  its limit, so a project or worktree list never opens with more than 7.
+  Collapsing a zone header resets its Show more state.
 - Zone collapse state lives in `useSessionProjectViewState` next to project
   collapse and lasts for the mount only. The display menu's Collapse all /
   Expand all set every project and the zones (`SIDEBAR_ACTIVITY_KEYS`: Chats,
   In work) together, in both views. Session folders keep their own
   collapse state.
 - Zone and project headers are sticky in both views; there is no user toggle.
-  Timeline zone headers drop the leading icon and use a taller band; its
-  project headers are the grouped view's, with the same hover actions and menu.
+  Both views draw the same zone headers, with the leading icon that turns
+  into the collapse chevron on hover and the Chats new-chat button; project
+  headers are shared too, with the same hover actions and menu.
 - Below Chats and In work it renders one project
   header per project followed by that project's non-archived root sessions
   from every worktree and space, in the shared lifecycle order with pinned
@@ -465,7 +468,9 @@ matching and ordering. Search does not fetch sessions or broaden list membership
   unread-subtask preference without mounting those sessions. Expanded and archived
   folders do not derive hidden activity.
 - Single-project flat mode reveals 20 root sessions initially and 20 per Show
-  more; Show fewer resets to 20. Chats retains its own default reveal size. Reveal
+  more; Show fewer resets to 20. Chats keeps its reveal of 3. Elsewhere a
+  Tree worktree group reveals 7 sessions, 7 more per Show more, and 10 in
+  VS Code. Reveal
   controls change the logical list, not the viewport's bounded mounted window.
 - Archiving or deleting a session takes its whole active subtree with it on every surface, because the server does not cascade `time.archived`. In work and managed Chats build their rows with `buildActiveSessionNode` from `list/sessionCollection.ts`, so the descendants a row collects match the project tree at any depth; the mobile sessions sheet resolves the same lineage with `getDescendantIds` over its full active list rather than the rendered bucket. `sessions/sessionSubtreeActions.ts` owns the single-versus-batch store calls and the outcome toasts for all of them, and `collectSessionSubtreeIds` extends the surface's own descendant list at action time with a walk over the global active-plus-archived cache, so an active subagent below an archived intermediate is still archived (archive skips the archived intermediate; delete includes it). A projection that flattens a tree to one level silently leaves grandchildren active.
 - Subsessions belong to the agent run that spawned them, not to the user. They appear only nested under an active parent: the archive (sidebar bucket, auto folders and the Archive page) lists top-level sessions only, an archived subsession or one under an archived parent is hidden rather than promoted to a row of its own, and there is no restore for a subsession; it comes back when its parent is restored. A subsession whose parent is not loaded yet stays visible as a root.
@@ -480,7 +485,7 @@ matching and ordering. Search does not fetch sessions or broaden list membership
 - Cleanup after a PR merge is opt-in (`mergedWorktreeCleanupEnabled`, Settings → Sessions, off by default; maintainer decision 2026-10-02). `hooks/useMergedWorktreeCleanup.ts` reads the branch PR status the sidebar already keeps fresh for each discovered linked worktree, asking GitHub nothing itself, and `lib/worktrees/mergedWorktreeCleanup.ts` decides: wait while any session there is not confirmed idle, is the open session, or the worktree is the directory on screen; otherwise archive its sessions, and remove the worktree with its local branch only when the checkout is clean and has no commit outside the merged PR's head commit (`head..HEAD` is empty, so a checkout behind a PR that gained commits on the host qualifies). When this clone never fetched that commit, a branch whose upstream it is not ahead of qualifies too; with neither answer the worktree stays. Sessions are archived once per worktree and PR pair (remembered in local storage), so work continued in a kept worktree is never archived again. A kept worktree without sessions is checked again on every pass and removed once nothing there can be lost; sessions in a kept worktree mean the work went on, and it is left alone. It runs on desktop and web only; VS Code has no worktrees and a phone would race the desktop it drives. Only worktrees of projects whose worktrees the sidebar has discovered are covered.
 - CLI/server-created sessions use the low-frequency OpenChamber control event stream to refresh only the created session directory. The same event re-lists the worktrees of the session's project, or of every project when the session's directory is not a project root or a known worktree, so a newly created external worktree gains ownership without a view reload; it does not re-enable broad session or streaming subscriptions.
 - A successful restore on the current runtime promotes only the session's ephemeral list-order rank. It does not change timestamps or live status, and it resets on a runtime switch.
-- `useProjectRepoStatus` reads Git status once per project path while the sidebar is visible. A change to the project list that adds no path (collapse, rename, color, last opened) reads nothing; an added project reads only its own status; a failed read is retried on the next list change. Hiding the sidebar or switching runtime starts over.
+- `useProjectRepoStatus` reads Git status once per project path while the sidebar is visible. A change to the project list that adds no path (collapse, rename, color, last opened) reads nothing; an added project reads only its own status; a failed read is retried on the next list change. New paths are first read together through `GitAPI.prefetchProjectStatuses`, one batched request that warms the status cache, so the per-project reads after it are cache hits; VS Code has no batched read and reads one by one. Hiding the sidebar or switching runtime starts over.
 - Structural updates rebuild grouped nodes only for projects whose local sessions, worktrees, repository state, branch, or worktree-ordering ranks changed; unchanged project sections preserve references so memoized group/session descendants skip the update wave. The grouping builder therefore keeps its identity across inputs the section cache compares per project: it reads git branches and lifecycle ranks at call time, and keeps the session ownership map while every session's scope directory is unchanged (the ownership index itself is rebuilt on any session-list change). Without a search query every group shares one empty search-data map, so a rebuilt section does not invalidate the others' group headers.
 - Empty successful lists, unresolved loads, and failed loads are separate UI states. Failed groups expose Retry and retain prior data.
 - List loading and workspace initialization have separate states. The spinner follows only the list queue; config, MCP, LSP, and live-state recovery cannot keep a successful empty list spinning. A core initialization failure has a separate localized notice and reuses the retry/native-access actions without clearing loaded sessions.

@@ -253,6 +253,12 @@ failed read keeps what was known and records `loadError` instead of reading as
 "routing is off". See `packages/web/server/lib/routing/DOCUMENTATION.md`.
 
 `messageQueueStore.ts` has two owners, decided by `isServerOwnedMessageQueue()`.
+The VS Code foreground delivery gate holds an idle parent while a live busy or
+retry descendant runs, following up to 8 parent links through the cached sync
+session index. It rechecks on status and session-topology changes. Activity
+comes from the queue directory's live status map; unrelated active trees and
+background shells do not hold delivery. This is a queue-specific exception to
+the own-session send status described in `../sync/DOCUMENTATION.md`.
 On web, desktop, and mobile the server delivers the queue independently of the
 UI. The store projects authoritative snapshots and revisioned session updates.
 Scheduled queue items also retain their `scheduledTask` provenance. An inherited
@@ -371,7 +377,7 @@ Provider and agent catalogs carry separate successful-load flags in directory sn
 
 Provider reads share one request per directory, both in `loadProviders` and in the client's `getProvidersForConfig`. A read prompted by a change (a catalog event, a provider mutation) passes `fresh`: it never joins a request already in flight, because that one can carry the catalog from before the change, say a worktree opened before OpenCode registered its plugin providers. It waits that request out and reads again. When every attempt for the active directory fails and it has never loaded, one delayed retry follows; without it nothing re-reads that directory until something unrelated, such as Settings → Providers, asks.
 
-OpenCode 2 does not wait for a directory to start before answering: the first provider read of a cold directory returns an empty or partial list, and the plugin providers arrive later with `provider.updated` for that directory. The catalog refresh re-reads only the active directory, so every catalog event also calls `markConfigCatalogStale(kind, directory)`, which takes that directory's providers or agents out of the 30-second freshness window (`null`, for a server-wide event such as a credential change, takes out all of them). Switching back to a worktree left mid-start therefore re-reads it instead of keeping the incomplete snapshot. Meanwhile the composer labels the selected model, its efforts and the agent with `selectKnownCatalogModel` / `selectKnownAgent`, which fall back to any other directory's snapshot, so a cold directory shows the name it already knows rather than a raw id or "Select agent". That fallback is display only: selection, effort resolution and validation read the active catalog, and a model or agent no catalog knows is shown as before.
+OpenCode 2 does not wait for a directory to start before answering: the first provider read of a cold directory returns an empty or partial list, and the plugin providers arrive later with `provider.updated` for that directory. Since 2.0.27 the model routes do wait for the directory's plugins, so `getProvidersForConfig` asks for providers only after the models answered, and on those versions the first provider catalog is complete; agents still answer empty first. The catalog refresh re-reads only the active directory, so every catalog event also calls `markConfigCatalogStale(kind, directory)`, which takes that directory's providers or agents out of the 30-second freshness window (`null`, for a server-wide event such as a credential change, takes out all of them). Switching back to a worktree left mid-start therefore re-reads it instead of keeping the incomplete snapshot. Meanwhile the composer labels the selected model, its efforts and the agent with `selectKnownCatalogModel` / `selectKnownAgent`, which fall back to any other directory's snapshot, so a cold directory shows the name it already knows rather than a raw id or "Select agent". That fallback is display only: selection, effort resolution and validation read the active catalog, and a model or agent no catalog knows is shown as before.
 
 An effort picked in a project draft travels to another worktree of the same project (`activateDirectory` with `preserveManualModel`), also while the model is still the automatic one. `currentVariant` is what a send carries, so every loader that keeps a pick in `currentVariantSelection` also writes that pick to `currentVariant` (`variantAfterResolve`) instead of the default it resolved for the model; otherwise the picker showed the pick and the send used the default. Marks carry a revision, and a load that began before the latest mark for its directory does not make that directory fresh again.
 
@@ -602,7 +608,10 @@ value came from: a string is an effort chosen in the picker or by the shortcut,
 `null` is an explicit `Default`, and `undefined` is automatic initialization,
 which lets the inherited default apply.
 
-`Default` sends no effort at all. It cannot resolve back to the inherited
+`Default` sends no effort at all: OpenCode's `ModelRef.variant` is an optional
+string and rejects `null`, so `toModelRef` (`lib/opencode/model.ts`) turns the
+`null` into a model reference without a `variant` at every OpenCode call that
+takes one. It cannot resolve back to the inherited
 default: the settings default would take effect again, and the next assistant
 reply echoes that effort back as an explicit choice, so the picker jumps off
 `Default` one message after the user chose it. For the same reason the

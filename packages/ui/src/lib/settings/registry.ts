@@ -39,6 +39,7 @@ import { z } from 'zod';
 import {
   fromSchema,
   mapParser,
+  parseActivityRenderMode,
   parseBoolean,
   parseCustomProviderIcons,
   parseDesktopWindowControlsPosition,
@@ -306,7 +307,8 @@ export const SETTINGS_REGISTRY = {
   }),
   // The machine of the Docker over SSH place of isolated spaces, `[user@]host[:port]` as the
   // user's own `ssh` takes it; the empty string means no such place. The server reads it when
-  // the feature comes up. No settings screen writes it yet.
+  // the feature comes up; the "Isolated spaces" page writes it through the host's `PUT /machine`
+  // route, never directly, since the host rebuilds its places on the change.
   isolatedSpacesSshHost: field({ scope: 'instance', parse: parseTrimmedStringUpTo(320) }),
   // Server-owned: it says whether this build has the feature at all.
   agentMemoryFeatureAvailable: field({
@@ -401,12 +403,12 @@ export const SETTINGS_REGISTRY = {
   collapsibleThinkingBlocks: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('collapsibleThinkingBlocks', (v) => useUIStore.getState().setCollapsibleThinkingBlocks(v)) }),
   expandReasoningWhileStreaming: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('expandReasoningWhileStreaming', (v) => useUIStore.getState().setExpandReasoningWhileStreaming(v)) }),
   showTextJustificationActivity: field({ scope: 'profile', parse: parseBoolean }),
-  chatRenderMode: field({ scope: 'profile', parse: parseOneOf(['sorted', 'live']), ui: uiStore('chatRenderMode', (v) => useUIStore.getState().setChatRenderMode(v)) }),
-  activityRenderMode: field({ scope: 'profile', parse: parseOneOf(['collapsed', 'summary']), ui: uiStore('activityRenderMode', (v) => useUIStore.getState().setActivityRenderMode(v)) }),
+  /** Legacy chat mode that `activityRenderMode` absorbs at parse time. */
+  chatRenderMode: field({ scope: 'profile', parse: parseOneOf(['sorted', 'live']) }),
+  activityRenderMode: field({ scope: 'profile', parse: parseActivityRenderMode, ui: uiStore('activityRenderMode', (v) => useUIStore.getState().setActivityRenderMode(v)) }),
   mermaidRenderingMode: field({ scope: 'profile', parse: parseOneOf(['svg', 'ascii']), ui: uiStore('mermaidRenderingMode', (v) => useUIStore.getState().setMermaidRenderingMode(v)) }),
   userMessageRenderingMode: field({ scope: 'profile', parse: parseOneOf(['markdown', 'plain']), ui: uiStore('userMessageRenderingMode', (v) => useUIStore.getState().setUserMessageRenderingMode(v)) }),
   collapsibleUserMessages: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('collapsibleUserMessages', (v) => useUIStore.getState().setCollapsibleUserMessages(v)) }),
-  stickyUserHeader: field({ scope: 'profile', perSurface: true, parse: parseBoolean, ui: uiStore('stickyUserHeader', (v) => useUIStore.getState().setStickyUserHeader(v)) }),
   promptNavigatorEnabled: field({ scope: 'profile', perSurface: true, parse: parseBoolean, ui: uiStore('promptNavigatorEnabled', (v) => useUIStore.getState().setPromptNavigatorEnabled(v)) }),
   wideChatLayoutEnabled: field({ scope: 'profile', perSurface: true, parse: parseBoolean, ui: uiStore('wideChatLayoutEnabled', (v) => useUIStore.getState().setWideChatLayoutEnabled(v)) }),
   showSplitAssistantMessageActions: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('showSplitAssistantMessageActions', (v) => useUIStore.getState().setShowSplitAssistantMessageActions(v)) }),
