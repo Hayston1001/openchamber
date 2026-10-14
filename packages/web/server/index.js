@@ -75,6 +75,7 @@ import {
 } from './lib/opencode/core-routes.js';
 import { registerOpenChamberRoutes } from './lib/opencode/openchamber-routes.js';
 import { createServerUtilsRuntime } from './lib/opencode/server-utils-runtime.js';
+import { createWindowsPowerShellResolver } from './lib/opencode/windows-powershell.js';
 import { createStaticRoutesRuntime } from './lib/opencode/static-routes-runtime.js';
 import { createSettingsRuntime } from './lib/opencode/settings-runtime.js';
 import { createOpenCodeResolutionRuntime } from './lib/opencode/opencode-resolution-runtime.js';
@@ -1264,6 +1265,17 @@ const processForwardedServerEvent = (payload, emitSyntheticEvent, spaceId = null
 };
 
 
+// Which PowerShell the managed OpenCode shell will run, and the stable
+// PowerShell 7 install directory that keeps a Store upgrade from breaking every
+// later shell spawn (#4895). The resolver probes once per process and is the
+// only place that decides either answer.
+const windowsPowerShellRuntime = createWindowsPowerShellResolver({
+  env: process.env,
+  platform: process.platform,
+  path,
+  spawnSync,
+});
+
 const serverUtilsRuntime = createServerUtilsRuntime({
   // Read lazily: the archive store is created with the session service further
   // down, while the proxy is registered later still.
@@ -1312,6 +1324,7 @@ const serverUtilsRuntime = createServerUtilsRuntime({
     }
     return snapshot.PATH;
   },
+  getStablePowerShell7Directory: () => windowsPowerShellRuntime.getStableDirectory(),
 });
 
 const setOpenCodePort = (...args) => serverUtilsRuntime.setOpenCodePort(...args);
@@ -1478,6 +1491,7 @@ const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
   buildAugmentedPath,
   buildManagedOpenCodePath,
   getManagedOpenCodeShellEnvSnapshot: getLoginShellEnvSnapshot,
+  getShellInterpreterDiagnostics: () => windowsPowerShellRuntime.describe({ managedPath: buildManagedOpenCodePath() }),
   getActiveSessionCount,
   // Most-recently-used directories first: OpenCode initializes each directory
   // lazily on first request (seconds on large session stores), so the
