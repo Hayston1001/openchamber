@@ -9,28 +9,36 @@ import {
 
 const PROGRAM_FILES = 'C:\\Program Files';
 const LOCAL_APPDATA = 'C:\\Users\\Ada\\AppData\\Local';
+const USER_PROFILE = 'C:\\Users\\Ada';
 const WINDOWS_APPS = `${LOCAL_APPDATA}\\Microsoft\\WindowsApps`;
 const STABLE_7_DIR = `${PROGRAM_FILES}\\PowerShell\\7`;
 const STABLE_7_PREVIEW_DIR = `${PROGRAM_FILES}\\PowerShell\\7-preview`;
 const STABLE_7_EXE = `${STABLE_7_DIR}\\pwsh.exe`;
 const STABLE_7_PREVIEW_EXE = `${STABLE_7_PREVIEW_DIR}\\pwsh.exe`;
 const USER_STABLE_7_EXE = `${LOCAL_APPDATA}\\Microsoft\\PowerShell\\7\\pwsh.exe`;
-const LEGACY_PS_EXE = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
 const SYSTEM_PATH = 'C:\\Windows\\System32';
+const SYSTEM_PWSH = `${SYSTEM_PATH}\\pwsh.exe`;
+const SYSTEM_POWERSHELL = `${SYSTEM_PATH}\\powershell.exe`;
+const ALIAS_PWSH = `${WINDOWS_APPS}\\pwsh.exe`;
+const ALIAS_POWERSHELL = `${WINDOWS_APPS}\\powershell.exe`;
+const LEGACY_POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+const WINDOWS_PATH_DELIMITER = ';';
 
 const probeOutput = (version, executable) => `${version}|${executable}`;
 
-const baseEnv = (PATH = SYSTEM_PATH) => ({
-  PATH,
+const baseEnv = (overrides = {}) => ({
+  PATH: SYSTEM_PATH,
   ProgramFiles: PROGRAM_FILES,
   LOCALAPPDATA: LOCAL_APPDATA,
+  USERPROFILE: USER_PROFILE,
   SystemRoot: 'C:\\Windows',
   PATHEXT: '.COM;.EXE;.BAT;.CMD',
+  ...overrides,
 });
 
-// Keys are the executable handed to spawnSync. A function value answers by the
-// PATH the probe was given, which is how the alias case is modeled: the store
-// alias directory is only reachable when it is on the PATH in question.
+// Keys are the absolute executable handed to spawnSync, which is the point: the
+// resolver must resolve a name against the PATH it reports on, because a bare
+// name would be looked up with this process's own PATH instead.
 const createProbeStub = (executables) => {
   const calls = [];
   const spawnSync = (executable, _args, options) => {
@@ -93,10 +101,18 @@ describe('createWindowsPowerShellResolver', () => {
   it('treats an existing directory whose binary is not PowerShell 7 as absent', () => {
     // A stale or half-removed install still sits at the stable path.
     const { resolver } = createResolver({
-      [STABLE_7_EXE]: probeOutput('5.1.26100.9549', LEGACY_PS_EXE),
+      [STABLE_7_EXE]: probeOutput('5.1.26100.9549', LEGACY_POWERSHELL),
     });
 
     expect(resolver.getStableDirectory()).toBeNull();
+  });
+
+  it('accepts a preview build as PowerShell 7', () => {
+    const { resolver } = createResolver({
+      [STABLE_7_PREVIEW_EXE]: probeOutput('7.5.0-preview.4', STABLE_7_PREVIEW_EXE),
+    });
+
+    expect(resolver.getStableDirectory()).toBe(STABLE_7_PREVIEW_DIR);
   });
 
   it('skips a stable candidate that cannot be spawned', () => {
@@ -118,12 +134,25 @@ describe('createWindowsPowerShellResolver', () => {
     expect(resolver.getStableDirectory()).toBe(STABLE_7_PREVIEW_DIR);
   });
 
+  it('resolves a name to absolute candidates from the reported PATH, never to a bare name', () => {
+    const { resolver, calls } = createResolver({
+      [ALIAS_PWSH]: probeOutput('7.6.7', ALIAS_PWSH),
+    });
+
+    resolver.describe({ managedPath: SYSTEM_PATH });
+
+    const probed = calls.map((call) => call.executable);
+    expect(probed).toContain(SYSTEM_PWSH);
+    expect(probed).toContain(ALIAS_PWSH);
+    expect(probed.every((executable) => executable.includes('\\'))).toBe(true);
+    expect(probed).not.toContain('pwsh.exe');
+    expect(probed).not.toContain('powershell.exe');
+  });
+
   it('reports the stable install once it is in front of the managed PATH', () => {
-    const managedPath = [STABLE_7_DIR, SYSTEM_PATH].join(';');
+    const managedPath = [STABLE_7_DIR, SYSTEM_PATH].join(WINDOWS_PATH_DELIMITER);
     const { resolver } = createResolver({
       [STABLE_7_EXE]: probeOutput('7.6.7', STABLE_7_EXE),
-      'pwsh.exe': (pathValue) => (pathValue.includes(STABLE_7_DIR) ? probeOutput('7.6.7', STABLE_7_EXE) : null),
-      'powershell.exe': probeOutput('5.1.26100.9549', LEGACY_PS_EXE),
     });
 
     const report = resolver.describe({ managedPath });
@@ -142,10 +171,10 @@ describe('createWindowsPowerShellResolver', () => {
   it('reports the versioned Store target the alias resolves to', () => {
     const versionedTarget = 'C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.6.7.0_x64__8wekyb3d8bbwe\\pwsh.EXE';
     const { resolver } = createResolver({
-      'pwsh.exe': probeOutput('7.6.7', versionedTarget),
+      [ALIAS_PWSH]: probeOutput('7.6.7', versionedTarget),
     });
 
-    const report = resolver.describe({ managedPath: [WINDOWS_APPS, SYSTEM_PATH].join(';') });
+    const report = resolver.describe({ managedPath: [WINDOWS_APPS, SYSTEM_PATH].join(WINDOWS_PATH_DELIMITER) });
 
     expect(report.diagnostics.effectivePath).toBe(versionedTarget);
     expect(report.diagnostics.downgrade).toBe(false);
@@ -153,24 +182,26 @@ describe('createWindowsPowerShellResolver', () => {
   });
 
   it('warns only when PowerShell 7 is installed but the shell resolves to 5.1', () => {
-    // The managed PATH does not carry the alias directory, so by-name resolution
-    // falls to Windows PowerShell even though this machine has pwsh 7.
+    // The managed PATH is built from a redirected LocalAppData, so it does not
+    // carry the alias directory and by-name resolution falls to Windows
+    // PowerShell, while the Store pwsh 7 still exists under the user profile.
+    const redirectedLocalAppData = 'C:\\Redirected\\Local';
     const { resolver } = createResolver({
-      'pwsh.exe': (pathValue) => (pathValue.includes(WINDOWS_APPS) ? probeOutput('7.6.7', `${WINDOWS_APPS}\\pwsh.exe`) : null),
-      'powershell.exe': probeOutput('5.1.26100.9549', LEGACY_PS_EXE),
-    });
+      [ALIAS_PWSH]: probeOutput('7.6.7', ALIAS_PWSH),
+      [LEGACY_POWERSHELL]: probeOutput('5.1.26100.9549', LEGACY_POWERSHELL),
+    }, baseEnv({ LOCALAPPDATA: redirectedLocalAppData }));
 
     const report = resolver.describe({ managedPath: SYSTEM_PATH });
 
     expect(report.diagnostics.downgrade).toBe(true);
-    expect(report.diagnostics.pwshPath).toBe(`${WINDOWS_APPS}\\pwsh.exe`);
+    expect(report.diagnostics.pwshPath).toBe(ALIAS_PWSH);
     expect(report.diagnostics.effectiveVersion).toBe('5.1.26100.9549');
     expect(report.warning).toContain('Windows PowerShell 5.1');
   });
 
   it('stays silent on a machine whose only interpreter is Windows PowerShell 5.1', () => {
     const { resolver } = createResolver({
-      'powershell.exe': probeOutput('5.1.26100.9549', LEGACY_PS_EXE),
+      [SYSTEM_POWERSHELL]: probeOutput('5.1.26100.9549', LEGACY_POWERSHELL),
     });
 
     const report = resolver.describe({ managedPath: SYSTEM_PATH });
@@ -183,7 +214,7 @@ describe('createWindowsPowerShellResolver', () => {
 
   it('falls back to the absolute Windows PowerShell path when by-name lookup finds nothing', () => {
     const { resolver } = createResolver({
-      [LEGACY_PS_EXE]: probeOutput('5.1.26100.9549', LEGACY_PS_EXE),
+      [LEGACY_POWERSHELL]: probeOutput('5.1.26100.9549', LEGACY_POWERSHELL),
     });
 
     const report = resolver.describe({ managedPath: '' });

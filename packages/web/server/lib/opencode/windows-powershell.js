@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { isString } from '../shared/guards.js';
-import { createExecutableSearchEnv } from '../tunnels/executable-search.js';
+import { getExecutableSearchDirectories, getWindowsAppsDirectory } from '../tunnels/executable-search.js';
 
 // Resolving the Windows PowerShell interpreter the managed OpenCode shell will
 // use, and finding a PowerShell 7 install whose path does not change under the
@@ -21,8 +21,11 @@ import { createExecutableSearchEnv } from '../tunnels/executable-search.js';
 
 // An interpreter is verified by running it, never by its path existing: a
 // half-removed MSI, a quarantined file and a stale reparse target all sit at a
-// path that looks right.
-const WINDOWS_POWERSHELL_PROBE_TIMEOUT_MS = 10_000;
+// path that looks right. A healthy PowerShell answers in well under a second,
+// so a probe that overruns is abandoned rather than holding the server's event
+// loop, and the whole resolution stops once its budget is spent.
+const WINDOWS_POWERSHELL_PROBE_TIMEOUT_MS = 2_000;
+const WINDOWS_POWERSHELL_PROBE_BUDGET_MS = 5_000;
 const MINIMUM_POWERSHELL_MAJOR = 7;
 
 // Version and the executable that actually ran. `Get-Process` reports the real
@@ -75,7 +78,9 @@ const parseVersionProbeOutput = (raw) => {
 
   const [versionText = '', executableText = ''] = line.split('|');
   const version = versionText.trim();
-  if (!/^\d+(?:\.\d+){1,3}$/.test(version)) return null;
+  // A preview build answers with a version like `7.5.0-preview.4`, which is a
+  // usable PowerShell 7 and must not be read as "no interpreter".
+  if (!/^\d+(?:\.\d+){1,3}(?:[-+][0-9A-Za-z.]+)?$/.test(version)) return null;
 
   const major = Number.parseInt(version, 10);
   if (!Number.isFinite(major)) return null;
@@ -144,6 +149,36 @@ export const createWindowsPowerShellResolver = ({
   // The PATH the resolver reports against when the caller has none of its own.
   const defaultPathValue = () => firstNonEmpty(env.PATH, env.Path, env.path);
 
+  // The absolute files a bare name resolves to, in the order the Windows loader
+  // tries them. Handing the name to spawnSync would answer something else: a
+  // bare name is looked up with the calling process's PATH, and the child `env`
+  // block is applied only after the lookup, so the probe would describe the
+  // server's own PATH rather than the managed PATH it is reporting on.
+  const nameCandidates = (name, pathValue) => getExecutableSearchDirectories({
+    env: withPath(env, pathValue),
+    platform,
+  }).map((directory) => pathApi.join(directory, name));
+
+  const probeName = (name, pathValue, deadline) => {
+    for (const candidate of nameCandidates(name, pathValue)) {
+      if (Date.now() > deadline) return null;
+      const probed = probe(candidate, pathValue);
+      if (probed) return probed;
+    }
+    return null;
+  };
+
+  // A PowerShell 7 this machine has whatever the managed PATH reaches. The alias
+  // directory comes from the user profile rather than from LOCALAPPDATA on
+  // purpose: the managed PATH is built from LOCALAPPDATA, so asking that same
+  // source twice could never disagree and the downgrade warning below could
+  // never fire.
+  const userAliasCandidates = () => {
+    const userProfile = firstNonEmpty(env.USERPROFILE, env.UserProfile, env.userprofile);
+    const directory = getWindowsAppsDirectory(userProfile ? { USERPROFILE: userProfile } : {});
+    return directory ? [pathApi.join(directory, 'pwsh.exe')] : [];
+  };
+
   // The stable install to prepend, verified by running it. The newest of the
   // stable directories wins, so a leftover older install never shadows a newer
   // one that sits beside it.
@@ -152,7 +187,9 @@ export const createWindowsPowerShellResolver = ({
     if (stableResolved) return stableDirectory ? { directory: stableDirectory, probe: stableProbe } : null;
     stableResolved = true;
 
+    const deadline = Date.now() + WINDOWS_POWERSHELL_PROBE_BUDGET_MS;
     for (const directory of getStablePowerShell7Directories({ env, platform, path: pathApi })) {
+      if (Date.now() > deadline) break;
       const probed = probe(pathApi.join(directory, 'pwsh.exe'), defaultPathValue());
       if (!probed || probed.major < MINIMUM_POWERSHELL_MAJOR) continue;
       if (!stableProbe || isNewerVersion(probed.version, stableProbe.version)) {
@@ -167,11 +204,12 @@ export const createWindowsPowerShellResolver = ({
   /**
    * What the managed shell will run, given the PATH OpenChamber hands it.
    *
-   * `installed` is a verified PowerShell 7 this machine has, looked up with the
-   * alias directory included the way `executable-search.js` does it. `effective`
-   * is what the shell resolves by name from the given PATH. The two differ only
-   * when PowerShell 7 is installed but reachable through something the managed
-   * PATH does not carry, which is the one case worth telling the user about.
+   * `installed` is a PowerShell 7 this machine has: the one the managed PATH
+   * already resolves, or a stable install, or the Store alias under the user's
+   * own profile. `effective` is what the shell resolves by name from the given
+   * PATH. The two differ only when PowerShell 7 is installed but reachable
+   * through something the managed PATH does not carry, which is the one case
+   * worth naming in a warning.
    */
   const describe = ({ managedPath } = {}) => {
     if (platform !== 'win32') return null;
@@ -179,17 +217,21 @@ export const createWindowsPowerShellResolver = ({
     const effectivePathValue = isString(managedPath) && managedPath ? managedPath : defaultPathValue();
     if (reportCache.has(effectivePathValue)) return reportCache.get(effectivePathValue);
 
+    const deadline = Date.now() + WINDOWS_POWERSHELL_PROBE_BUDGET_MS;
     const stable = resolveStable();
-    const effectiveProbe = probe('pwsh.exe', effectivePathValue)
-      ?? probe('powershell.exe', effectivePathValue)
+    const effectiveProbe = probeName('pwsh.exe', effectivePathValue, deadline)
+      ?? probeName('powershell.exe', effectivePathValue, deadline)
       ?? probe(legacyWindowsPowerShellPath({ env, path: pathApi }), effectivePathValue);
 
     const installedProbe = (() => {
       if (effectiveProbe && effectiveProbe.major >= MINIMUM_POWERSHELL_MAJOR) return effectiveProbe;
       if (stable && stable.probe) return stable.probe;
-      const searchEnv = createExecutableSearchEnv({ env: withPath(env, effectivePathValue), platform });
-      const probed = probe('pwsh.exe', searchEnv.PATH);
-      return probed && probed.major >= MINIMUM_POWERSHELL_MAJOR ? probed : null;
+      for (const candidate of userAliasCandidates()) {
+        if (Date.now() > deadline) return null;
+        const probed = probe(candidate, effectivePathValue);
+        if (probed && probed.major >= MINIMUM_POWERSHELL_MAJOR) return probed;
+      }
+      return null;
     })();
 
     const downgrade = installedProbe !== null

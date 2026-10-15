@@ -451,11 +451,25 @@ in-process cache:
   `lastOpenCodeLaunchDiagnostics.shellInterpreter` as `pwshPath`/`pwshVersion`,
   `effectivePath`/`effectiveVersion`, `insertedDirectory` and `downgrade`. `/health`
   and the copied status report therefore name the real shell rather than the
-  intended one. When a verified PowerShell 7 exists on the machine while the shell
-  resolves to Windows PowerShell 5.1, the same launch logs one warning line. That
-  condition is defensive: the managed PATH reaches every PowerShell 7 install
-  OpenChamber can find for the account, so it holds only when the process
-  environment hides one, and a machine whose only PowerShell is 5.1 stays quiet.
+  intended one. When a PowerShell 7 exists at a stable install or under the user's
+  own profile while the shell resolves to Windows PowerShell 5.1, the same launch
+  logs one warning line. That condition is defensive: the managed PATH reaches
+  every PowerShell 7 install OpenChamber can find for the account, so it holds only
+  when the process environment hides one, and a machine whose only PowerShell is
+  5.1 stays quiet.
+
+Resolution runs before the probe, never through it. A name is expanded to its
+absolute candidates from the PATH being reported on (`getExecutableSearchDirectories`
+from `../tunnels/executable-search.js`, which also knows the WindowsApps alias
+directory), and only those absolute paths are spawned. Handing a bare name to
+`spawnSync` would answer a different question: a bare name is looked up with the
+calling process's PATH and the child `env` block applies only after the lookup, so
+the probe would describe the server's own PATH. The alias used for the downgrade
+check is located from the user profile rather than from `LOCALAPPDATA`, because the
+managed PATH is built from `LOCALAPPDATA` and asking that same source twice could
+never disagree. Probes are cached per process, each is abandoned after two seconds,
+and the whole resolution stops after five, so a hung or quarantined interpreter
+cannot hold the server's event loop for long.
 
 `windows-powershell.js` probes once per process and caches the verification and
 the report. On a machine with only the Store build there is no stable directory
