@@ -15,6 +15,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { getDirectoryForFilePath } from '@/lib/path-utils';
+import { hasTextSelectionInside } from '@/lib/textSelection';
 import { useI18n } from '@/lib/i18n';
 import {
     INTERACTIVE_REFERENCE_CHIP_CLASS,
@@ -128,20 +129,6 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
         openContextFile(effectiveDirectory || getDirectoryForFilePath('', skill.path) || '/', skill.path);
     }, [effectiveDirectory, openContextFile, skillByName]);
 
-    const hasActiveSelectionInElement = React.useCallback((element: HTMLElement): boolean => {
-        if (typeof window === 'undefined') {
-            return false;
-        }
-
-        const selection = window.getSelection();
-        if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
-            return false;
-        }
-
-        const range = selection.getRangeAt(0);
-        return element.contains(range.startContainer) || element.contains(range.endContainer);
-    }, []);
-
     // Measured before paint, and reported to the message (which renders the
     // show-full-message link) before paint too: measured after it, a sent
     // message painted without the link and grew by its height a frame later,
@@ -217,7 +204,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
         if (citationChip) {
             event.preventDefault();
             event.stopPropagation();
-            if (textRef.current && hasActiveSelectionInElement(textRef.current)) return;
+            if (textRef.current && hasTextSelectionInside(textRef.current)) return;
             openCitedAttachment(citationChip);
             return;
         }
@@ -237,7 +224,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
             return;
         }
 
-        if (hasActiveSelectionInElement(element)) {
+        if (hasTextSelectionInside(element)) {
             return;
         }
 
@@ -247,7 +234,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
         if (collapsibleUserMessages && !messageExpanded && element.scrollHeight > element.clientHeight) {
             handleExpand();
         }
-    }, [collapsibleUserMessages, messageExpanded, handleExpand, hasActiveSelectionInElement, openCitedAttachment, openSkill]);
+    }, [collapsibleUserMessages, messageExpanded, handleExpand, openCitedAttachment, openSkill]);
 
     // The Markdown chip is a focusable span with the button role; the plain
     // one is a real button, which turns Enter and Space into a click itself.

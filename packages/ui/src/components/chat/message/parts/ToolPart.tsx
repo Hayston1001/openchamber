@@ -79,6 +79,7 @@ import { useChatColumnActions } from '@/components/chat/chatColumnSession';
 import { useStreamingTextThrottle } from '../../hooks/useStreamingTextThrottle';
 import { getStreamingOutputAppend, getToolOutput } from './toolOutput';
 import { toAbsoluteFilePath } from '@/lib/path-utils';
+import { hasTextSelectionInside } from '@/lib/textSelection';
 import {
     executeOutputTruncation,
     executeScript,
@@ -1759,6 +1760,9 @@ const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader; subage
         }
 
         event.stopPropagation();
+        if (hasTextSelectionInside(event.currentTarget)) {
+            return;
+        }
         const rawPath = getApplyPatchFilePath(file);
         const displayPath = rawPath ? getRelativePath(rawPath, currentDirectory) : '';
         openApplyPatchFileInEditor({
@@ -1807,6 +1811,12 @@ const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader; subage
         } else {
             onToggle(part.id);
         }
+    };
+
+    const handleMainRowClick = (event: React.MouseEvent<HTMLDivElement>) => {
+        // Selecting the tool title must not open the file or toggle the row.
+        if (hasTextSelectionInside(event.currentTarget)) return;
+        handleMainClick(event);
     };
 
     const handleMainKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -1888,7 +1898,7 @@ const ToolPartContent: React.FC<ToolPartProps & { header?: ToolRowHeader; subage
                     'group/tool flex gap-1.5 pe-2 ps-px py-1.5 rounded-xl',
                     isMultiFileApplyPatch ? 'flex-wrap items-start cursor-pointer' : 'items-center cursor-pointer',
                 )}
-                onClick={isMultiFileApplyPatch ? () => onToggle(part.id) : handleMainClick}
+                onClick={isMultiFileApplyPatch ? () => onToggle(part.id) : handleMainRowClick}
                 onKeyDown={isMultiFileApplyPatch ? (event) => {
                     if (event.target !== event.currentTarget) return;
                     if (event.key !== 'Enter' && event.key !== ' ') return;

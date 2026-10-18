@@ -68,6 +68,7 @@ import { isCapacitorMobileApp } from '@/apps/mobileNativeChrome';
 import { shareFileFromNativeApp } from '@/lib/nativeFileShare';
 import { WorktreeRequiresGitRepositoryError } from '@/lib/worktrees/worktreeCreate';
 import { buildTurnImageExportSource, cloneMessageImageExportSource } from './imageExport';
+import { hasTextSelectionInside } from '@/lib/textSelection';
 
 
 const CONTAIN_LAYOUT_STYLE = { contain: 'layout' as const, transform: 'translateZ(0)' };
@@ -119,6 +120,8 @@ const TurnChangedFilePillButton = React.memo(({
             onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
+                // Keep a filename selection selectable instead of opening the file.
+                if (hasTextSelectionInside(event.currentTarget)) return;
                 onOpen(file.file);
             }}
         >
