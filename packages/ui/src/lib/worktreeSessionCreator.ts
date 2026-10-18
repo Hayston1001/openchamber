@@ -5,7 +5,7 @@
  */
 
 import { toast } from '@/components/ui';
-import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useSessionUIStore, type NewSessionDraftState } from '@/sync/session-ui-store';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useContextStore } from '@/stores/contextStore';
@@ -15,7 +15,10 @@ import { generateBranchName } from '@/lib/git/branchNameGenerator';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { getWorktreeSetupWaitEnabled } from '@/lib/openchamberConfig';
-import { resolveWorktreeSetupCommands } from '@/lib/sharedTrustConfirmation';
+import {
+  resolveWorktreeSetupCommands,
+  resolveWorktreeSetupCommandsOrCancel,
+} from '@/lib/sharedTrustConfirmation';
 import {
   removeProjectWorktree,
   type ProjectRef,
@@ -25,6 +28,7 @@ import {
   createPendingDraftWorktreeRequest,
   rejectPendingDraftWorktreeRequest,
   resolvePendingDraftWorktreeRequest,
+  waitForPendingDraftWorktreeRequest,
 } from '@/lib/worktrees/pendingDraftWorktree';
 import { waitForWorktreeBootstrap } from '@/lib/worktrees/worktreeBootstrap';
 import { normalizePath } from '@/lib/pathNormalization';
@@ -68,10 +72,15 @@ export const resolveProjectRef = (directory: string): ProjectRef | null => {
 
 export const createQuickWorktree = async (
   project: ProjectRef,
-  options: { preferredName?: string; startRef?: string } = {},
+  options: { preferredName?: string; startRef?: string; cancelOnTrustDismiss?: boolean } = {},
 ) => {
   const preferredName = options.preferredName ?? generateBranchName();
-  const setupCommands = await resolveWorktreeSetupCommands(project);
+  const setupCommands = options.cancelOnTrustDismiss
+    ? await resolveWorktreeSetupCommandsOrCancel(project)
+    : await resolveWorktreeSetupCommands(project);
+  if (setupCommands === null) {
+    return null;
+  }
   return createWorktreeWithDefaults(project, {
     preferredName,
     mode: 'new',
@@ -173,6 +182,32 @@ const initializeSessionForWorktree = (sessionId: string, metadata: {
 };
 
 
+const rollBackCancelledDraftWorktree = (
+  requestId: string,
+  previousDraft: NewSessionDraftState,
+): void => {
+  const sessionStore = useSessionUIStore.getState();
+  // A draft that is never sent must not turn the cancel into an unhandled rejection.
+  void waitForPendingDraftWorktreeRequest(requestId).catch(() => undefined);
+  rejectPendingDraftWorktreeRequest(requestId, new Error('Worktree creation cancelled'));
+  if (!previousDraft.open) {
+    sessionStore.resolvePendingDraftWorktreeTarget(requestId, null);
+    sessionStore.closeNewSessionDraft();
+    return;
+  }
+  // Put the draft back where it was before the worktree was requested: its
+  // directory target, title and "Creating..." state belong to the cancelled request.
+  sessionStore.overrideNewSessionDraftTarget({
+    selectedProjectId: previousDraft.selectedProjectId,
+    directoryOverride: previousDraft.directoryOverride,
+    pendingWorktreeRequestId: previousDraft.pendingWorktreeRequestId ?? null,
+    bootstrapPendingDirectory: previousDraft.bootstrapPendingDirectory ?? null,
+    preserveDirectoryOverride: previousDraft.preserveDirectoryOverride === true,
+    title: previousDraft.title,
+    initialPrompt: previousDraft.initialPrompt,
+  });
+};
+
 const createInstantWorktreeDraft = async (options?: {
   initialPrompt?: string;
   title?: string;
@@ -214,15 +249,16 @@ const createInstantWorktreeDraft = async (options?: {
 
   try {
     const projectRef: ProjectRef = { id: activeProject.id, path: projectDirectory };
+    const previousDraft = useSessionUIStore.getState().newSessionDraft;
     const pendingRequestId = createPendingDraftWorktreeRequest();
 
     // Lock the draft immediately so no React effect can reset it to the project
     // root while we await worktree creation below.
     const sessionStore = useSessionUIStore.getState();
-    if (sessionStore.newSessionDraft?.open) {
+    if (previousDraft.open) {
       sessionStore.overrideNewSessionDraftTarget({
         projectId: projectRef.id,
-        directoryOverride: sessionStore.newSessionDraft.directoryOverride ?? projectRef.path,
+        directoryOverride: previousDraft.directoryOverride ?? projectRef.path,
         pendingWorktreeRequestId: pendingRequestId,
         preserveDirectoryOverride: true,
         title: options?.title,
@@ -243,7 +279,11 @@ const createInstantWorktreeDraft = async (options?: {
 
     // A preview path has no bootstrap state yet. Selecting it lets background
     // OpenCode reads initialize an instance before the worktree exists.
-    const metadata = await createQuickWorktree(projectRef, { preferredName });
+    const metadata = await createQuickWorktree(projectRef, { preferredName, cancelOnTrustDismiss: true });
+    if (!metadata) {
+      rollBackCancelledDraftWorktree(pendingRequestId, previousDraft);
+      return null;
+    }
 
     resolvePendingDraftWorktreeRequest(pendingRequestId, metadata.path);
     useSessionUIStore.getState().overrideNewSessionDraftTarget({

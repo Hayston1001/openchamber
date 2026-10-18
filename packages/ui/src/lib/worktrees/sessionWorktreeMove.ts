@@ -328,6 +328,7 @@ const moveSessionTreeToQuickWorktree = async (input: {
       ? await resolveSourceBranch(input.sourceDirectory, project.path)
       : null;
     const worktree = await createQuickWorktree(project, sourceBranch ? { startRef: sourceBranch } : {});
+    if (!worktree) throw new Error('Worktree creation cancelled');
     try {
       await waitForWorktreeGitReady(worktree.path);
     } catch (error) {
