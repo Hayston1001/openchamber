@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { readEnterprisePolicy } from '../enterprise-mode.js';
 import { clearAppImageArgv0FromProcessEnv } from '../inherited-env.js';
+import { isString } from '../shared/guards.js';
 import { mergePathValues } from './path-utils.js';
 
 // Login-shell probes source the user's rc files. A slow or interactive rc
@@ -15,6 +16,10 @@ const SHELL_PROBE_TIMEOUT_MS = 5_000;
 // PowerShell profile on a stuck OneDrive folder, `where` walking a dead
 // network drive in PATH) hangs the whole process with no output.
 const WINDOWS_PROBE_TIMEOUT_MS = 10_000;
+
+// A PowerShell folder a Store upgrade can rename: either the versioned package
+// directory or the package-family alias directory, both under WindowsApps.
+const WINDOWS_STORE_POWERSHELL_PATH_ENTRY = /[\\/]WindowsApps[\\/]Microsoft\.PowerShell_[^\\/]+$/i;
 
 // Interactive rc files may print a banner, motd or other text to stdout before
 // the shell runs the probe command. That text would otherwise fuse with the
@@ -285,6 +290,55 @@ export const createOpenCodeEnvRuntime = (deps) => {
 
     state.cachedLoginShellEnvSnapshot = null;
     return null;
+  };
+
+  // A Store-installed pwsh puts its own alias folders under WindowsApps on the
+  // PATH of the children it starts, and a versioned package folder can reach
+  // that PATH too. `getWindowsShellEnvSnapshot` keeps its result for the life of
+  // the process, so a Store upgrade leaves a folder that no longer exists ahead
+  // of every later shell resolution. OpenCode's own lookup stats each candidate
+  // and skips a dead one, which is how an installed PowerShell 7 turns into a
+  // silent fallback to Windows PowerShell 5.1 (#4895).
+  const isMissingStorePowerShellEntry = (entry) => (
+    WINDOWS_STORE_POWERSHELL_PATH_ENTRY.test(entry) && !fs.existsSync(entry)
+  );
+
+  const splitPathValue = (value) => (isString(value) ? value.split(path.delimiter).filter(Boolean) : []);
+
+  const withoutMissingStorePowerShellEntries = (value) => (
+    isString(value)
+      ? splitPathValue(value).filter((entry) => !isMissingStorePowerShellEntry(entry)).join(path.delimiter)
+      : value
+  );
+
+  /**
+   * Drops `...\WindowsApps\Microsoft.PowerShell_*` PATH entries whose folder a
+   * Store upgrade removed, then probes the user's shell again so the folder the
+   * upgrade created replaces the one it took away. Called before each managed
+   * launch; cheap when nothing is stale, because only entries that match are
+   * ever stat-ed. Returns true when it had work to do.
+   */
+  const refreshStaleWindowsPowerShellPaths = () => {
+    if (process.platform !== 'win32') return false;
+
+    const cached = state.cachedLoginShellEnvSnapshot;
+    const cachedPath = cached && isString(cached.PATH) ? cached.PATH : '';
+    const missing = [...splitPathValue(cachedPath), ...splitPathValue(process.env.PATH)]
+      .filter(isMissingStorePowerShellEntry);
+    if (missing.length === 0) return false;
+
+    process.env.PATH = withoutMissingStorePowerShellEntries(process.env.PATH);
+    state.cachedLoginShellEnvSnapshot = undefined;
+    const refreshed = getLoginShellEnvSnapshot();
+    if (refreshed && isString(refreshed.PATH)) {
+      state.cachedLoginShellEnvSnapshot = {
+        ...refreshed,
+        PATH: withoutMissingStorePowerShellEntries(refreshed.PATH),
+      };
+    }
+
+    console.log(`[env] Refreshed the shell environment after a PowerShell update removed ${missing.join(', ')}`);
+    return true;
   };
 
   const applyLoginShellEnvSnapshot = () => {
@@ -1339,6 +1393,7 @@ export const createOpenCodeEnvRuntime = (deps) => {
     ensureOpencodeCliEnv,
     applyOpencodeBinaryFromSettings,
     getLoginShellEnvSnapshot,
+    refreshStaleWindowsPowerShellPaths,
     resolveOpencodeCliPath,
     isBundledOpenCodeCliPath,
     resolveManagedOpenCodeLaunchSpec,

@@ -144,6 +144,10 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
     // machine has a PowerShell 7 the shell does not reach (#4895). Null off
     // Windows and whenever the resolver cannot answer.
     getShellInterpreterDiagnostics = () => null,
+    // Re-probes the Windows shell environment when a Store upgrade removed a
+    // PowerShell folder it still lists (#4895). Called before each managed
+    // launch, and a no-op off Windows or when nothing is stale.
+    refreshShellEnvSnapshot = () => false,
     getManagedOpenCodeEnv = async () => ({}),
     // Variables from Settings and `opencode service set env` (lib/environment).
     getUserEnvironment = () => ({}),
@@ -740,6 +744,14 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
     });
     phaseStartedAt = performance.now();
     const openCodePassword = await ensureLocalOpenCodeServerPassword({ rotateManaged: true });
+    // A Store upgrade can leave a folder it removed in the cached shell
+    // environment, and OpenCode's lookup would skip that dead entry and fall
+    // back (#4895). Refresh before the PATH below is built from the snapshot.
+    try {
+      refreshShellEnvSnapshot?.();
+    } catch (error) {
+      console.warn('[OpenCode] shell environment refresh failed:', error?.message ?? error);
+    }
     let envPath = process.env.PATH;
     if (typeof buildManagedOpenCodePath === 'function') {
       envPath = buildManagedOpenCodePath();

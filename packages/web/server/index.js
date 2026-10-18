@@ -1492,6 +1492,7 @@ const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
   buildManagedOpenCodePath,
   getManagedOpenCodeShellEnvSnapshot: getLoginShellEnvSnapshot,
   getShellInterpreterDiagnostics: () => windowsPowerShellRuntime.describe({ managedPath: buildManagedOpenCodePath() }),
+  refreshShellEnvSnapshot: () => openCodeEnvRuntime.refreshStaleWindowsPowerShellPaths(),
   getActiveSessionCount,
   // Most-recently-used directories first: OpenCode initializes each directory
   // lazily on first request (seconds on large session stores), so the

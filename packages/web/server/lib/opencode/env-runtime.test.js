@@ -581,6 +581,54 @@ describe('OpenCode env runtime', () => {
     }
   });
 
+  it('refreshes the Windows shell environment when a Store upgrade removed a PowerShell folder', () => {
+    setPlatform('win32');
+    const staleEntry = path.join(
+      createTempDir('openchamber-stale-store-'),
+      'WindowsApps',
+      'Microsoft.PowerShell_7.6.6.0_x64__8wekyb3d8bbwe',
+    );
+    const liveEntry = path.join(
+      createTempDir('openchamber-live-store-'),
+      'WindowsApps',
+      'Microsoft.PowerShell_7.6.7.0_x64__8wekyb3d8bbwe',
+    );
+    fs.mkdirSync(liveEntry, { recursive: true });
+    const systemDir = createTempDir('openchamber-system-');
+    process.env.LOCALAPPDATA = createTempDir('openchamber-localappdata-');
+    process.env.SystemRoot = createTempDir('openchamber-empty-systemroot-');
+    process.env.PATH = [createTempDir('openchamber-empty-path-'), staleEntry].join(path.delimiter);
+
+    const snapshotValue = (pathValue) => `PATH=${pathValue}\0SHELL_ONLY=yes\0`;
+    const responses = [
+      snapshotValue([staleEntry, systemDir].join(path.delimiter)),
+      snapshotValue([liveEntry, systemDir].join(path.delimiter)),
+    ];
+    let probeCount = 0;
+    const { runtime, state } = createRuntime({}, {
+      spawnSync: () => {
+        const stdout = responses[Math.min(probeCount, responses.length - 1)];
+        probeCount += 1;
+        return { status: 0, stdout, stderr: '' };
+      },
+    });
+
+    state.cachedLoginShellEnvSnapshot = undefined;
+    expect(runtime.getLoginShellEnvSnapshot().PATH).toContain(staleEntry);
+    expect(probeCount).toBe(1);
+
+    expect(runtime.refreshStaleWindowsPowerShellPaths()).toBe(true);
+    expect(probeCount).toBe(2);
+    const refreshed = runtime.getLoginShellEnvSnapshot();
+    expect(refreshed.PATH).toContain(liveEntry);
+    expect(refreshed.PATH).not.toContain(staleEntry);
+    expect(process.env.PATH).not.toContain(staleEntry);
+
+    // Nothing stale is left, so a second launch does not probe again.
+    expect(runtime.refreshStaleWindowsPowerShellPaths()).toBe(false);
+    expect(probeCount).toBe(2);
+  });
+
   it('does not auto-detect the Windows OpenCode desktop app as a CLI', () => {
     setPlatform('win32');
     const localAppData = createTempDir('openchamber-localappdata-');
