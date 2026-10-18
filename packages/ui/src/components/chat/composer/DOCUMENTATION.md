@@ -603,7 +603,12 @@ and the send path reading the same grammar.
   cannot drop an unlisted space or worktree directory. Only a worktree still being created (`pendingWorktreeRequestId`,
   `bootstrapPendingDirectory`) keeps both pickers inert. The hook also owns the
   advisory dirty state for the selected directory, clearing it as soon as the
-  target changes so a warning never names a previous branch.
+  target changes so a warning never names a previous branch. It re-reads the
+  project's branch list and worktree topology when the window regains focus or
+  becomes visible and when the branch picker opens, throttled to one read every
+  two seconds. The branch list's 30-second window has no timer of its own, so
+  without these triggers a branch changed outside the app stayed on screen
+  until the project changed.
 - `ui/DraftTargetSelectors.tsx` owns the controlled project/worktree picker
   state and registers its application shortcuts locally. The desktop project
   picker is a searchable popup: it ranks the current projects with

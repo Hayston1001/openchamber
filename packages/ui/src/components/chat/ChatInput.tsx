@@ -3642,7 +3642,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         shouldShowDraftBranchSelector,
         handleDraftProjectChange,
         handleDraftDirectoryChange,
+        refreshDraftTarget,
     } = useDraftTarget(showDraftTargetSelectors);
+
+    const handleMobileDraftPickerChange = React.useCallback((picker: 'project' | 'branch' | null) => {
+        if (picker === 'branch') {
+            refreshDraftTarget();
+        }
+        setMobileDraftPicker(picker);
+    }, [refreshDraftTarget]);
 
     // The one entry to an isolated space: while the feature's switch is on, for a project the
     // branch selector serves, never in VS Code (decision 16). The dialog keeps the project it
@@ -4131,6 +4139,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                             showBranchSelector={shouldShowDraftBranchSelector}
                             onProjectChange={handleDraftProjectChange}
                             onDirectoryChange={handleDraftDirectoryChange}
+                            onRefreshTarget={refreshDraftTarget}
                             onCreateSpace={handleCreateSpace}
                             onCreateCustomWorktree={handleCreateCustomWorktree}
                             theme={currentTheme}
@@ -4143,7 +4152,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         selectedBranchLabel={selectedDraftBranchLabel}
                         showBranchSelector={shouldShowDraftBranchSelector}
                         theme={currentTheme}
-                        onOpenPicker={setMobileDraftPicker}
+                        onOpenPicker={handleMobileDraftPickerChange}
                     />
                 ) : null}
                 </>) : null}
@@ -4629,7 +4638,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 onCreateCustomWorktree={handleCreateCustomWorktree}
                 theme={currentTheme}
                 openPicker={mobileDraftPicker}
-                onOpenPickerChange={setMobileDraftPicker}
+                onOpenPickerChange={handleMobileDraftPickerChange}
             />
         ) : null}
         {newSpaceProject ? (
