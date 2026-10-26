@@ -494,14 +494,15 @@ export function WorktreeWorkRow(props: Props): React.ReactNode {
         </div>
         {detailed ? (
           // Fixed 16px, always rendered, like a detailed session row's second
-          // line: the lead icon (or the chevron), then the branch, left out
-          // where it already is the title.
+          // line: the lead icon (or the chevron), then the branch. The branch
+          // stays while it is also the title: an unnamed worktree would
+          // otherwise leave this line empty until its task is named.
           <div className="flex h-4 w-full min-w-0 items-center gap-1">
             {lead}
-            {mixed && project && branch && branch !== label ? (
+            {mixed && project && branch ? (
               <Icon name="git-branch" className="h-3 w-3 flex-shrink-0 text-muted-foreground/40" />
             ) : null}
-            {branch && branch !== label ? (
+            {branch ? (
               <span className="min-w-0 truncate typography-micro text-muted-foreground/50">{branch}</span>
             ) : null}
             <span className="ms-auto flex flex-shrink-0 items-center gap-1">{ref}</span>

@@ -149,7 +149,7 @@ export const MobileWorktreeRow: React.FC<{
         secondLine={<>
           {mixedProject ? <MobileProjectIcon project={mixedProject} size="xs" /> : null}
           {branchMark}
-          {branch && branch !== label ? <span className="block min-w-0 truncate typography-micro">{branch}</span> : null}
+          {branch ? <span className="block min-w-0 truncate typography-micro">{branch}</span> : null}
           <span className="ms-auto flex shrink-0 items-center">{ref}</span>
         </>}
       />
