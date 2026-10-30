@@ -4843,6 +4843,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         <LargeTextPasteChoice
                             key={largeTextPasteOffer.id}
                             takeFocus={!isMobile}
+                            expanded={isComposerExpanded}
                             onChoose={(action, explicitlyChosen) => largeTextPasteOffer.resolve(action, explicitlyChosen)}
                             onTypeThrough={(text) => largeTextPasteOffer.resolve('inline', true, text)}
                         />

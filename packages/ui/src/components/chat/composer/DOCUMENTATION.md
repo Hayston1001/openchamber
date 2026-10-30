@@ -387,7 +387,9 @@ Large pastes (about 2,000 characters or 25 lines) follow the composer setting
 in-memory `text/plain` file named `pasted-context-N.txt`, inserts a bracket
 citation, and sends it through the same attachment pipeline as a manually
 picked `.txt` file. In `ask`, `ui/LargeTextPasteChoice` floats above the
-composer's start edge, styled like the chat text-selection menu. Its actions read live composer/attachment state so
+composer's start edge, styled like the chat text-selection menu. In focus mode
+the composer fills the surface, so there is no room above it and the choice
+sits just inside the composer's start edge instead. Its actions read live composer/attachment state so
 typing or other attaches between paste and choice stay consistent. Short text,
 images, and URL wraps keep their existing paths.
 In `inline-double-paste`, the first paste uses CodeMirror's native paste path.
