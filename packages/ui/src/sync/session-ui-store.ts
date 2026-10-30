@@ -13,6 +13,7 @@
  */
 
 import type { ContextPartMetadata } from "@/lib/messages/contextParts"
+import { readEffortRevision, rememberEffort } from "@/lib/modelEfforts"
 import { create } from "zustand"
 import { isSameModelRef, toModelRef, type Metadata, type ModelRef, type Part, type Session, type TextPart } from "@/lib/opencode/model"
 import type { AttachedFile, SessionWorktreeAttachment } from "@/stores/types/sessionTypes"
@@ -103,7 +104,7 @@ import { useSelectionStore } from "./selection-store"
 import { getViewportSessionMemory, useViewportStore, viewportSessionKey } from "./viewport-store"
 import { useSessionWorktreeStore } from "./session-worktree-store"
 import { getAttachedSessionDirectory } from "./session-worktree-contract"
-import { getRuntimeKey, isTransientRuntimeKey } from "@/lib/runtime-switch"
+import { captureRuntimeInstance, getRuntimeKey, isTransientRuntimeKey } from "@/lib/runtime-switch"
 import { clearLastActiveSession, persistLastActiveSession, readLastActiveSession } from "./last-session-cache"
 import { createSessionDraftId, useSessionDraftsStore } from "@/stores/useSessionDraftsStore"
 import { persistWorktreeTopology, readPersistedWorktreeTopology } from "./worktree-topology-cache"
@@ -402,6 +403,14 @@ type SendMessageOptions = {
    * replaces the composer's armed goal, which belongs to the composer text.
    */
   queuedGoal?: QueuedMessageGoal | null
+  /**
+   * A person sent this from a composer: after a successful prompt, remember
+   * the level it actually carried for that model. Background, BTW and queued
+   * delivery leave this unset and never overwrite the remembered level.
+   */
+  recordEffort?: boolean
+  /** Revision captured with the composer's selection, before async preparation. */
+  effortRevision?: number
 }
 
 type AssistantMessageSessionExecution = {
@@ -2170,6 +2179,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     options?: SendMessageOptions,
   ) => {
     const capturedTarget = options?.target
+    const effortRevision = options?.effortRevision ?? readEffortRevision(providerID, modelID)
+    const isCurrentRuntimeInstance = captureRuntimeInstance()
     const capturedRuntimeKey = capturedTarget?.runtimeKey ?? getRuntimeKey()
     if (capturedTarget && capturedTarget.runtimeKey !== getRuntimeKey()) {
       throw new Error("Message was not sent because the runtime changed.")
@@ -2358,7 +2369,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         }))
 
         try {
-          await routeMessage({
+          const draftRoute = await routeMessage({
             runtimeKey: capturedRuntimeKey,
             sessionId,
             directory: sessionDirectory,
@@ -2388,6 +2399,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
               })),
             })),
           })
+          if (draftRoute !== "shell" && options?.recordEffort && isCurrentRuntimeInstance()) {
+            rememberEffort(providerID, modelID, variant ?? null, effortRevision)
+          }
         } catch (error) {
           // The send can fail before the create response (a lost connection,
           // a command lookup): the creation still settles, and what the
@@ -2492,7 +2506,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         ? () => useInputHistoryStore.getState().appendSubmissions(historyIdentity, historySubmissions)
         : undefined
 
-      await routeMessage({
+      const routed = await routeMessage({
         runtimeKey: capturedRuntimeKey,
         sessionId: targetSessionId || "",
         directory: currentSessionDirectory,
@@ -2520,6 +2534,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
           })),
         })),
       })
+      if (routed !== "shell" && options?.recordEffort && isCurrentRuntimeInstance()) {
+        rememberEffort(providerID, modelID, variant ?? null, effortRevision)
+      }
       // Keep restore failures outside the send promise and its retry path.
       void resumeAfterSend?.().catch(console.warn)
     })

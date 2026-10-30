@@ -2726,6 +2726,7 @@ export const dict = {
   'chat.modelControls.selectModel': 'اختيار نموذج',
   'chat.modelControls.thinking': 'التفكير',
   'chat.modelControls.inheritedVariantTooltip': 'التفكير: {variant}، الافتراضي لهذا النموذج',
+  'chat.modelControls.rememberedVariantTooltip': 'التفكير: {variant}، آخر مستوى استخدم مع هذا النموذج',
   'chat.modelControls.default': 'الافتراضي',
   'chat.modelControls.selectAgent': 'اختيار وكيل',
   'chat.modelControls.costPerMillion': 'التكلفة ($/1M رمز)',

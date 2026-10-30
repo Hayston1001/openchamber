@@ -2754,6 +2754,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.modelControls.selectModel": "Seleccionar modelo",
   "chat.modelControls.thinking": "Pensando",
   "chat.modelControls.inheritedVariantTooltip": "Pensando: {variant}, predeterminado de este modelo",
+  "chat.modelControls.rememberedVariantTooltip": "Pensando: {variant}, último valor usado con este modelo",
   "chat.modelControls.default": "Predeterminado",
   "chat.modelControls.selectAgent": "Seleccionar agente",
   "chat.modelControls.costPerMillion": "Costo ($/1M tokens)",

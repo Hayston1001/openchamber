@@ -2505,6 +2505,7 @@ export const dict = {
   'chat.modelControls.selectModel': 'Modell auswählen',
   'chat.modelControls.thinking': 'Denken',
   'chat.modelControls.inheritedVariantTooltip': 'Denken: {variant}, Standard für dieses Modell',
+  'chat.modelControls.rememberedVariantTooltip': 'Denken: {variant}, zuletzt mit diesem Modell verwendet',
   'chat.modelControls.default': 'Standard',
   'chat.modelControls.selectAgent': 'Agent auswählen',
   'chat.modelControls.costPerMillion': 'Kosten ($/1M Tokens)',

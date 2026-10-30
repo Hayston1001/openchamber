@@ -2796,6 +2796,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.modelControls.selectModel': 'モデルを選択',
   'chat.modelControls.thinking': '思考',
   'chat.modelControls.inheritedVariantTooltip': '思考: {variant}（このモデルのデフォルト）',
+  'chat.modelControls.rememberedVariantTooltip': '思考: {variant}（このモデルで最後に使用）',
   'chat.modelControls.default': 'デフォルト',
   'chat.modelControls.selectAgent': 'エージェントを選択',
   'chat.modelControls.costPerMillion': 'コスト（$/100万トークン）',
