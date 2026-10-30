@@ -1331,7 +1331,12 @@ calls `restoreLastActiveSession` after it connects. A route, link, or click
 that selected a session first wins. The sidebar's project session selection
 (`useProjectSessionSelection`) ignores the project active when the list
 mounts and reacts only to later project switches; it used to pick that
-project's remembered or first session on launch.
+project's remembered or first session on launch. For the same reason the
+restore passes `keepSingleProject`, so reopening a session does not rewrite
+the sidebar's remembered One project picker: the restore is launch state, not
+the user choosing a project. The selection keeps that policy in memory until
+the next navigation, so a space's project arriving later also leaves the picker
+alone while making the restored session's project active.
 
 The scroll hook holds the gate
 until the viewport is in place. The reveal itself runs on the frames after the

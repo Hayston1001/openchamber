@@ -477,9 +477,17 @@ export type NewSessionDraftState = {
   workDraftId?: string
 }
 
+export type SetCurrentSessionOptions = {
+  /** The session materialized a submitted draft, which the chat announces as its own transition. */
+  transition?: "submitted-draft"
+  /** Launch restoration preserves the device's sidebar project selection. */
+  keepSingleProject?: boolean
+}
+
 export type SessionUIState = {
   currentSessionId: string | null
   currentSessionDirectory: string | null
+  currentSessionKeepsSingleProject: boolean
   materializedDraftSessionId: string | null
   /** First sends in flight, by the id of the session they create. */
   pendingDraftSends: ReadonlyMap<string, PendingDraftSend>
@@ -502,7 +510,7 @@ export type SessionUIState = {
   setCurrentSession: (
     id: string | null,
     directoryHint?: string | null,
-    transition?: "submitted-draft",
+    options?: SetCurrentSessionOptions,
   ) => void
   clearMaterializedDraftSession: (sessionId: string) => void
   prepareForRuntimeSwitch: (apiBaseUrl?: string | null) => void
@@ -1418,6 +1426,7 @@ const PERSISTED_WORKTREE_MAP = readPersistedWorktreeTopology(runtimeMemoryKey())
 export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   currentSessionId: null,
   currentSessionDirectory: null,
+  currentSessionKeepsSingleProject: false,
   materializedDraftSessionId: null,
   pendingDraftSends: new Map(),
   newSessionDraft: { ...DEFAULT_DRAFT },
@@ -1437,8 +1446,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   // ---------------------------------------------------------------------------
   // setCurrentSession
   // ---------------------------------------------------------------------------
-  setCurrentSession: (id, directoryHint?: string | null, transition?: "submitted-draft") => {
-    const materializedDraftSessionId = id && transition === "submitted-draft" ? id : null
+  setCurrentSession: (id, directoryHint?: string | null, options?: SetCurrentSessionOptions) => {
+    const materializedDraftSessionId = id && options?.transition === "submitted-draft" ? id : null
     // Publish the transition identity before closing the draft. Those are two
     // separate store updates, and ChatContainer must never observe a closed
     // draft with the previous transition identity.
@@ -1491,6 +1500,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     set({
       currentSessionId: id,
       currentSessionDirectory: id ? resolvedDir ?? null : null,
+      currentSessionKeepsSingleProject: Boolean(id && options?.keepSingleProject),
     })
     guessedSelectionSessionId = isGuessedDir && id ? id : null
     const rememberedDir = isGuessedDir ? null : resolvedDir ?? null
@@ -1509,7 +1519,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       if (sessionProject && projectsState.activeProjectId !== sessionProject.id) {
         projectsState.setActiveProjectIdOnly(sessionProject.id)
       }
-      if (id && !isGuessedDir && sessionProject) {
+      if (id && !isGuessedDir && sessionProject && !options?.keepSingleProject) {
         useSessionDisplayStore.getState().setSingleProjectId(sessionProject.id)
       }
       opencodeClient.setDirectory(resolvedDir ?? undefined)
@@ -1601,6 +1611,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     set({
       currentSessionId: restoredSessionId,
       currentSessionDirectory: restoredSessionId ? restoredDirectory : null,
+      currentSessionKeepsSingleProject: false,
       newSessionDraft: restoredSessionId ? { ...DEFAULT_DRAFT } : restoredDraft,
       abortPromptSessionId: null,
       abortPromptExpiresAt: null,
@@ -1765,6 +1776,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       newSessionDraft: nextDraft,
       currentSessionId: null,
       currentSessionDirectory: null,
+      currentSessionKeepsSingleProject: false,
       error: null,
     })
 
@@ -2142,7 +2154,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         const sessionId = descendingId("ses")
         const draftAgent = saveDraftSessionSelection(sessionId, selection)
         openPendingSessionTranscript(sessionId, sessionDirectory)
-        get().setCurrentSession(sessionId, sessionDirectory, "submitted-draft")
+        get().setCurrentSession(sessionId, sessionDirectory, { transition: "submitted-draft" })
         setPendingDraftSend(sessionId, { draftId: draft.draftId, sessionCreated: false })
         const releaseGate = () => setPendingDraftSend(sessionId, null)
 
@@ -2183,7 +2195,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
               // left for the project, a path the server canonicalized): the
               // transcript follows the record there.
               adoptSessionMove(sessionId, sessionDirectory, createdDirectory)
-              if (get().currentSessionId === sessionId) get().setCurrentSession(sessionId, createdDirectory, "submitted-draft")
+              if (get().currentSessionId === sessionId) get().setCurrentSession(sessionId, createdDirectory, { transition: "submitted-draft" })
             }
             // The session exists: from here its turn is the agent's.
             markSessionStatus(sessionId, createdDirectory, "busy")

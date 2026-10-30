@@ -20,6 +20,8 @@ import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { createContextPart } from '@/lib/messages/contextParts';
+import { useSpacesStore } from '@/lib/spaces/spaces-store';
+import { subscribeSpaceSessionProject } from './space-session-project';
 
 /**
  * Unit tests for session worktree routing through the authoritative store.
@@ -223,7 +225,7 @@ describe('draft materialization transition identity', () => {
     useSessionUIStore.getState().setCurrentSession(
       'session-created',
       '/projects/alpha',
-      'submitted-draft',
+      { transition: 'submitted-draft' },
     );
 
     expect(useSessionUIStore.getState().materializedDraftSessionId).toBe('session-created');
@@ -239,7 +241,7 @@ describe('draft materialization transition identity', () => {
     useSessionUIStore.getState().setCurrentSession(
       'session-created',
       '/projects/alpha',
-      'submitted-draft',
+      { transition: 'submitted-draft' },
     );
     useSessionUIStore.setState({
       newSessionDraft: { open: true, target: 'project', directoryOverride: '/projects/alpha' },
@@ -1323,6 +1325,64 @@ describe('sendMessage draft snapshot (issues #2222 / #2315)', () => {
     expect(sendMessageCalls).toHaveLength(1);
     expect(sendMessageCalls[0].id).toBe('session-project-a');
     expect(sendMessageCalls[0].directory).toBe('/projects/alpha');
+  });
+});
+
+describe('setCurrentSession and the one-project picker', () => {
+  beforeEach(() => {
+    useProjectsStore.setState({
+      projects: [
+        { id: 'project-alpha', path: '/projects/alpha', label: 'Alpha' },
+        { id: 'project-beta', path: '/projects/beta', label: 'Beta' },
+      ],
+      activeProjectId: 'project-beta',
+    });
+    useSessionDisplayStore.setState({ singleProjectId: 'project-beta' });
+    useSessionUIStore.setState({ currentSessionId: null, currentSessionDirectory: null });
+    useDirectoryStore.setState({ currentDirectory: '/projects/alpha' });
+  });
+
+  afterEach(() => {
+    useSpacesStore.getState().applyMarks([]);
+    useProjectsStore.setState({ projects: [], activeProjectId: null });
+    useSessionDisplayStore.setState({ singleProjectId: null });
+    useSessionUIStore.setState({ currentSessionId: null, currentSessionDirectory: null });
+  });
+
+  test('following a session the user opened moves the picker to its project', () => {
+    useSessionUIStore.getState().setCurrentSession('session-alpha', '/projects/alpha');
+
+    expect(useSessionDisplayStore.getState().singleProjectId).toBe('project-alpha');
+  });
+
+  test('a launch restore keeps the remembered picker and still makes its project active', () => {
+    useSessionUIStore.getState().setCurrentSession('session-alpha', '/projects/alpha', { keepSingleProject: true });
+
+    expect(useProjectsStore.getState().activeProjectId).toBe('project-alpha');
+    expect(useSessionDisplayStore.getState().singleProjectId).toBe('project-beta');
+  });
+
+  test.each([
+    ['launch restore', true, false, 'project-beta'],
+    ['user navigation', false, false, 'project-alpha'],
+    ['explicitly reopening the restored session', true, true, 'project-alpha'],
+  ])('late space metadata follows the picker policy after %s', (_name, keepSingleProject, reopen, expectedProject) => {
+    const spaceId = 'a1b2c3d4e5f6';
+    const directory = `/spaces/${spaceId}/app`;
+    useSpacesStore.getState().applyMarks([]);
+    useSessionUIStore.getState().setCurrentSession('session-picker-space', directory, { keepSingleProject });
+    if (reopen) useSessionUIStore.getState().setCurrentSession('session-picker-space', directory);
+    const unsubscribe = subscribeSpaceSessionProject(getRuntimeKey());
+    try {
+      useSpacesStore.getState().applyMarks([{
+        id: spaceId, name: 'test-space', state: 'complete',
+        projectDirectory: '/projects/alpha', directory,
+      }]);
+      expect(useProjectsStore.getState().activeProjectId).toBe('project-alpha');
+      expect(useSessionDisplayStore.getState().singleProjectId).toBe(expectedProject);
+    } finally {
+      unsubscribe();
+    }
   });
 });
 
