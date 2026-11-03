@@ -1939,8 +1939,38 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         requestAnimationFrame(focusColumnInput);
     };
 
+    // Every model list row shows the level it would run with. The level is
+    // remembered per model since 2.6.0, so comparing two models before
+    // switching is the reason to open this list, and a level that appears only
+    // on the row the pointer rests on cannot be compared against anything.
+    const renderThinkingSlot = (entry: ModelPickerEntry, { isHighlighted }: { isHighlighted: boolean }) => {
+        const hasThinkingVariants = getModelVariantOptions(entry.providerID, entry.modelID).length > 0;
+        if (!hasThinkingVariants) return null;
+        const mapKey = buildModelRefKey(entry.providerID, entry.modelID);
+        const wasAdjusted = adjustedThinkingModels.has(mapKey);
+
+        const hasPendingVariant = pendingThinkingVariants.has(mapKey);
+        const pendingVariant = pendingThinkingVariants.get(mapKey);
+        const effectiveVariant = hasPendingVariant
+            ? pendingVariant
+            : resolveModelVariantSelection(entry.providerID, entry.modelID) ?? undefined;
+        const displayLabel = effectiveVariant ? formatEffortLabel(effectiveVariant) : t('chat.modelControls.default');
+
+        // The effort as the composer shows it after the model: "/ medium".
+        return (
+            <span className={cn(
+                'typography-micro whitespace-nowrap lowercase',
+                isHighlighted
+                    ? (wasAdjusted ? 'text-interactive-selection-foreground' : 'text-interactive-selection-foreground/70')
+                    : (wasAdjusted ? 'text-foreground' : 'text-muted-foreground'),
+            )}>
+                <span aria-hidden="true" className="opacity-60">/ </span>{displayLabel}
+            </span>
+        );
+    };
+
     // The phone's sheet draws the desktop model list: one line per model and
-    // details on a long press. The effort lives in the composer, after the model.
+    // details on a long press. The level sits on every row, as on the desktop.
     const renderMobileModelPanel = () => {
         if (!isCompact) return null;
 
@@ -1965,6 +1995,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     leadingEntry={autoEntry}
                     isFavorite={(entry) => isFavoriteModel(entry.providerID, entry.modelID)}
                     onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerID, entry.modelID)}
+                    renderRowEnd={renderThinkingSlot}
                     onEntryDetails={(entry) => {
                         // The details take the keys: a search field left focused
                         // under them would close the list on Escape instead.
@@ -2336,32 +2367,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             setAgentMenuOpen(nextOpen);
         };
 
-
-        const renderThinkingSlot = (entry: ModelPickerEntry, { isHighlighted, isSelected }: { isHighlighted: boolean; isSelected: boolean }) => {
-            const hasThinkingVariants = getModelVariantOptions(entry.providerID, entry.modelID).length > 0;
-            const mapKey = buildModelRefKey(entry.providerID, entry.modelID);
-            const wasAdjusted = adjustedThinkingModels.has(mapKey);
-            if (!hasThinkingVariants || (!isHighlighted && !isSelected)) return null;
-
-            const hasPendingVariant = pendingThinkingVariants.has(mapKey);
-            const pendingVariant = pendingThinkingVariants.get(mapKey);
-            const effectiveVariant = hasPendingVariant
-                ? pendingVariant
-                : resolveModelVariantSelection(entry.providerID, entry.modelID) ?? undefined;
-            const displayLabel = effectiveVariant ? formatEffortLabel(effectiveVariant) : t('chat.modelControls.default');
-
-            // The effort as the composer shows it after the model: "/ medium".
-            return (
-                <span className={cn(
-                    'typography-micro whitespace-nowrap lowercase',
-                    isHighlighted
-                        ? (wasAdjusted ? 'text-interactive-selection-foreground' : 'text-interactive-selection-foreground/70')
-                        : (wasAdjusted ? 'text-foreground' : 'text-muted-foreground'),
-                )}>
-                    <span aria-hidden="true" className="opacity-60">/ </span>{displayLabel}
-                </span>
-            );
-        };
 
         return (
             <Tooltip delayDuration={600}>

@@ -22,9 +22,10 @@ around it, the footer's text and what a pick does.
 - Recent leaves out models Favorites already lists. Provider sections always
   list every model of the provider.
 - At rest a row shows its logo where the section does not say the provider,
-  its name, its context size and a set star. An empty star, the section
-  chevron of an open section and the effort a row would run with appear on
-  hover or highlight.
+  its name, its context size and a set star. An empty star and the chevron of
+  an open section appear on hover or highlight. A caller's row end may add
+  more, and the composer's adds the level the model would run with, on every
+  row that offers levels.
 - Under a finger (`pointer: coarse`) rows are at least 44px tall and the key
   hints footer is gone. With `onEntryDetails`, a device without hover leaves
   the stars off the rows; a long press (or a right click) opens the details,
@@ -75,8 +76,17 @@ The phone had a list of its own: a boxed card per section, two lines per
 model with capability icons nobody could explain on touch, an effort chip and
 a star on every row. Every change to the desktop list missed it. It now draws
 this list with `onEntryDetails` and `providersStartCollapsed`: one line per
-model, the effort only on the current one (a tap opens the effort sheet), and
-the details in a sheet of their own.
+model with its level, and the details in a sheet of their own.
+
+### Why the composer shows a model's level on every row
+
+The level used to appear on the row the pointer rested on, which left the
+list looking as if no model had one until the pointer moved. A level is
+remembered per model, so the list is where two models get compared before one
+is picked, and one level at a time cannot be compared against anything. The
+composer therefore draws it on every row that offers levels; rows without
+levels stay empty, and the settings and parallel-run pickers keep their own
+effort controls beside the list.
 
 ### Why a long press swallows the next click
 

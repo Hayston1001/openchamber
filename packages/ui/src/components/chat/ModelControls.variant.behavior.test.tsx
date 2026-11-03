@@ -379,15 +379,22 @@ mock.module('@/components/ui/tooltip', () => ({
   TooltipTrigger: passthrough,
 }));
 mock.module('@/components/icon/Icon', () => ({ Icon: () => null }));
+type ModelPickerListProps = React.ComponentProps<typeof import('@/components/model-picker/ModelPickerList').ModelPickerList>;
+/** Every prop ModelControls gives the model list, as of its last render. */
+let modelPickerProps: ModelPickerListProps | null = null;
 mock.module('@/components/model-picker/ModelPickerList', () => ({
-  ModelPickerList: ({ onSelect, onActiveKeyDown }: React.ComponentProps<typeof import('@/components/model-picker/ModelPickerList').ModelPickerList>) => (
-    <div
-      data-testid="model-picker-host"
-      onKeyDown={(event) => onActiveKeyDown?.(event, { providerID: PROVIDER_ID, modelID: MODEL_ID, model })}
-    >
-      <button onClick={() => onSelect({ providerID: PROVIDER_ID, modelID: MODEL_ID, model })}>{MODEL_ID}</button>
-    </div>
-  ),
+  ModelPickerList: (props: ModelPickerListProps) => {
+    modelPickerProps = props;
+    const { onSelect, onActiveKeyDown } = props;
+    return (
+      <div
+        data-testid="model-picker-host"
+        onKeyDown={(event) => onActiveKeyDown?.(event, { providerID: PROVIDER_ID, modelID: MODEL_ID, model })}
+      >
+        <button onClick={() => onSelect({ providerID: PROVIDER_ID, modelID: MODEL_ID, model })}>{MODEL_ID}</button>
+      </div>
+    );
+  },
   ModelPickerCardBody: () => null,
 }));
 mock.module('@/hooks/useRuntimeAPIs', () => ({ useIsVSCodeRuntime: () => false }));
@@ -500,41 +507,44 @@ const renderModelControls = async (
   };
 };
 
-describe('ModelControls effort restore', () => {
-  beforeEach(() => {
-    variantWrites.length = 0;
-    overrideWrites.length = 0;
-    lastSelectedWrites.length = 0;
-    pendingModelWrites.length = 0;
-    latestUserChoice = null;
-    knownElsewhere = nothingKnownElsewhere();
-    setSessionRecord(undefined);
-    forcePreserveManualOverride = null;
-    useSessionUIStore.setState({ currentSessionId: SESSION_ID });
-    useUIStore.setState({ isMobile: false, isModelSelectorOpen: false, lastUsedEfforts: {} });
-    useSelectionStore.setState({
-      savedVariant: undefined,
-      sessionAgentSelections: new Map([[SESSION_ID, AGENT]]),
-      sessionFollowedAgents: new Map(),
-      sessionFollowedModels: new Map(),
-    });
-    useConfigStore.setState({
-      providers: [provider],
-      agents: [agent],
-      providersLoaded: true,
-      agentsLoaded: true,
-      settingsDefaultsLoaded: true,
-      currentProviderId: PROVIDER_ID,
-      currentModelId: MODEL_ID,
-      currentAgentName: AGENT,
-      currentVariant: undefined,
-      currentVariantSelection: { override: undefined, inherited: undefined },
-      settingsDefaultModel: undefined,
-      settingsDefaultVariant: undefined,
-      selectionSource: 'auto',
-      getModelMetadata: () => undefined,
-    });
+const resetModelControlsState = () => {
+  variantWrites.length = 0;
+  overrideWrites.length = 0;
+  lastSelectedWrites.length = 0;
+  pendingModelWrites.length = 0;
+  latestUserChoice = null;
+  knownElsewhere = nothingKnownElsewhere();
+  setSessionRecord(undefined);
+  forcePreserveManualOverride = null;
+  modelPickerProps = null;
+  useSessionUIStore.setState({ currentSessionId: SESSION_ID });
+  useUIStore.setState({ isMobile: false, isModelSelectorOpen: false, lastUsedEfforts: {} });
+  useSelectionStore.setState({
+    savedVariant: undefined,
+    sessionAgentSelections: new Map([[SESSION_ID, AGENT]]),
+    sessionFollowedAgents: new Map(),
+    sessionFollowedModels: new Map(),
   });
+  useConfigStore.setState({
+    providers: [provider],
+    agents: [agent],
+    providersLoaded: true,
+    agentsLoaded: true,
+    settingsDefaultsLoaded: true,
+    currentProviderId: PROVIDER_ID,
+    currentModelId: MODEL_ID,
+    currentAgentName: AGENT,
+    currentVariant: undefined,
+    currentVariantSelection: { override: undefined, inherited: undefined },
+    settingsDefaultModel: undefined,
+    settingsDefaultVariant: undefined,
+    selectionSource: 'auto',
+    getModelMetadata: () => undefined,
+  });
+};
+
+describe('ModelControls effort restore', () => {
+  beforeEach(resetModelControlsState);
 
   for (const missing of ['request', 'body', 'permissions', 'v2 fields']) {
     test(`renders a cached agent without ${missing}`, async () => {
@@ -1579,6 +1589,40 @@ describe('ModelControls in a pinned column', () => {
     const { cleanup } = await renderModelControls({ selection: pinnedSelection, sessionId: 'ses_pinned', agentSelectable: true }, column);
     try {
       expect(catalogLoads).toEqual([`models:${PINNED_FOLDER}`, `agents:${PINNED_FOLDER}`]);
+    } finally {
+      await cleanup();
+    }
+  });
+});
+
+/** The text of one node, drawn in the test's own document. */
+const textOfNode = async (container: HTMLElement, node: React.ReactNode): Promise<string> => {
+  const host = container.ownerDocument.createElement('div');
+  container.appendChild(host);
+  const root = createRoot(host);
+  await act(async () => root.render(<>{node}</>));
+  const text = host.textContent ?? '';
+  await act(async () => root.unmount());
+  host.remove();
+  return text;
+};
+
+describe('the composer model list', () => {
+  beforeEach(resetModelControlsState);
+
+  test('shows the level a model would run with on every row, not only the pointed one', async () => {
+    const { dom, cleanup } = await renderModelControls();
+    try {
+      const rowEnd = modelPickerProps?.renderRowEnd;
+      expect(typeof rowEnd).toBe('function');
+      const entry = { providerID: PROVIDER_ID, modelID: MODEL_ID, model };
+      const atRest = await textOfNode(dom.container, rowEnd!(entry, { isHighlighted: false, isSelected: false }));
+      const pointed = await textOfNode(dom.container, rowEnd!(entry, { isHighlighted: true, isSelected: false }));
+      expect(atRest).toContain('Default');
+      expect(atRest).toBe(pointed);
+      // A model with no levels offers nothing in that column.
+      const autoEntry = { providerID: AUTO_PROVIDER_ID, modelID: AUTO_MODEL_ID, model: { id: AUTO_MODEL_ID } };
+      expect(rowEnd!(autoEntry, { isHighlighted: false, isSelected: false })).toBeNull();
     } finally {
       await cleanup();
     }
