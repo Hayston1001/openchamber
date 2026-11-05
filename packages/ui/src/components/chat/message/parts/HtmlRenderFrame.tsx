@@ -31,7 +31,6 @@ import { TextSelectionMenu } from '../TextSelectionMenu';
 import {
     HTML_RENDER_MIN_HEIGHT,
     buildHtmlRenderDocument,
-    clampHtmlRenderHeight,
     htmlRenderAnswerStateMessage,
     htmlRenderClearSelectionMessage,
     htmlRenderFileName,
@@ -40,6 +39,7 @@ import {
     htmlRenderRevealMessage,
     htmlRenderSubmitReply,
     htmlRenderThemeMessage,
+    nextHtmlRenderHeight,
     readHtmlRenderFrameMessage,
     type HtmlRenderAnswerState,
     type HtmlRenderKeyChord,
@@ -290,7 +290,16 @@ function FullscreenPage({ partId, messageId, html, title, initialHeight, answerS
     onSubmit: (submission: HtmlRenderSubmission) => Promise<void>;
 }) {
     const [height, setHeight] = React.useState(initialHeight);
-    const handleContentHeight = React.useCallback((contentHeight: number) => setHeight(Math.ceil(contentHeight)), []);
+    const heightRef = React.useRef(height);
+    React.useLayoutEffect(() => {
+        heightRef.current = height;
+    }, [height]);
+    const handleContentHeight = React.useCallback((contentHeight: number) => {
+        const next = nextHtmlRenderHeight(heightRef.current, contentHeight);
+        if (next === null) return;
+        heightRef.current = next;
+        setHeight(next);
+    }, []);
     return (
         <PageSelectionScope messageId={messageId} className="flex min-h-0 flex-col px-5 pb-5">
             <HtmlRenderDocument
@@ -378,6 +387,10 @@ function HtmlRenderFrame({ part, html, title, ask }: HtmlRenderFrameProps) {
     const loadedHtml = useRenderPageHtml(part, html);
     const pageHtml = loadedHtml ?? html;
     const [height, setHeight] = React.useState(() => rememberedHeights.get(partId) ?? HTML_RENDER_MIN_HEIGHT);
+    const heightRef = React.useRef(height);
+    React.useLayoutEffect(() => {
+        heightRef.current = height;
+    }, [height]);
     const [fullscreen, setFullscreen] = React.useState(false);
 
     // The browser panel's annotation, on the page in its message: the agent
@@ -399,7 +412,9 @@ function HtmlRenderFrame({ part, html, title, ask }: HtmlRenderFrameProps) {
     const canAnnotate = !isVSCodeRuntime() && loadedHtml !== null;
 
     const handleContentHeight = React.useCallback((contentHeight: number) => {
-        const next = clampHtmlRenderHeight(contentHeight);
+        const next = nextHtmlRenderHeight(heightRef.current, contentHeight);
+        if (next === null) return;
+        heightRef.current = next;
         rememberHeight(partId, next);
         setHeight(next);
     }, [partId]);

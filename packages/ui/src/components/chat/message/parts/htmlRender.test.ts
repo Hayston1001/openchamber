@@ -8,6 +8,7 @@ import {
     htmlRenderFileName,
     htmlRenderSubmitReply,
     htmlRenderTheme,
+    nextHtmlRenderHeight,
     readHtmlRenderFrameMessage,
     type HtmlRenderTheme,
 } from './htmlRender';
@@ -228,6 +229,27 @@ describe('helpers', () => {
         // A long page takes its full height; only a runaway one is stopped.
         expect(clampHtmlRenderHeight(5000)).toBe(5000);
         expect(clampHtmlRenderHeight(1_000_000)).toBe(20_000);
+    });
+
+    test('does not follow the one-pixel ping-pong a page shorter than its frame reports', () => {
+        // Setting 515 makes the page report 514, and 514 makes it report 515.
+        expect(nextHtmlRenderHeight(515, 514)).toBeNull();
+        expect(nextHtmlRenderHeight(514, 515)).toBeNull();
+        // The two reports the app sees at a fractional device pixel ratio.
+        expect(nextHtmlRenderHeight(603, 602.2)).toBeNull();
+        expect(nextHtmlRenderHeight(515, 515)).toBeNull();
+    });
+
+    test('ignores a frame that has not been laid out yet', () => {
+        expect(nextHtmlRenderHeight(612, 0)).toBeNull();
+        expect(nextHtmlRenderHeight(612, -1)).toBeNull();
+        expect(nextHtmlRenderHeight(612, Number.NaN)).toBeNull();
+    });
+
+    test('follows a real content change, clamped like any other height', () => {
+        expect(nextHtmlRenderHeight(612, 700)).toBe(700);
+        expect(nextHtmlRenderHeight(612, 10)).toBe(48);
+        expect(nextHtmlRenderHeight(48, 5000)).toBe(5000);
     });
 
     test('names the download after the page title', () => {

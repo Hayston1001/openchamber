@@ -705,6 +705,26 @@ export const clampHtmlRenderHeight = (height: number): number => (
     Math.min(HTML_RENDER_MAX_HEIGHT, Math.max(HTML_RENDER_MIN_HEIGHT, Math.ceil(height)))
 );
 
+/**
+ * The height the frame should take after the page reports `reported`, or null
+ * when the report must be ignored.
+ *
+ * A page shorter than its frame reports the frame's own box
+ * (`documentElement.getBoundingClientRect().height`), so the height the frame
+ * takes is an input to the next measurement. At a fractional device pixel ratio
+ * a content height that lands on an integer makes the page measure two adjacent
+ * heights in turn: setting 515 makes it report 514, setting 514 makes it report
+ * 515. The chat is pinned to the end, so every one of those reports moved the
+ * whole transcript by a pixel. A change of a pixel or less is invisible and is
+ * not followed; a real content change is larger. Zero is a frame that has not
+ * been laid out yet, not a content height.
+ */
+export const nextHtmlRenderHeight = (current: number, reported: number): number | null => {
+    if (!Number.isFinite(reported) || reported <= 0) return null;
+    const next = clampHtmlRenderHeight(reported);
+    return Math.abs(next - current) <= 1 ? null : next;
+};
+
 /** A download name from the page title, without characters file systems reject. */
 export function htmlRenderFileName(title: string): string {
     const name = title
